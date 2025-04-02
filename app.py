@@ -5,17 +5,49 @@ from dotenv import load_dotenv
 import json
 import time
 import subprocess
-import threading
-import queue
+import pyaudio
+import wave
+import io
 
 # Load environment variables
 load_dotenv()
 
-# Initialize speech recognizer
+# Initialize speech recognizer with basic settings
 recognizer = sr.Recognizer()
+recognizer.energy_threshold = 300
+recognizer.dynamic_energy_threshold = True
 
-# Create a queue for keyboard input
-input_queue = queue.Queue()
+def listen():
+    """Listen for user input and convert to text."""
+    try:
+        # Explicitly use MacBook Pro Microphone (index 4)
+        with sr.Microphone(device_index=4) as source:
+            print("\nListening... (speak now)")
+            print("Adjusting for ambient noise...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print("Ready! Speak clearly into the microphone...")
+            
+            try:
+                audio = recognizer.listen(source, timeout=5)
+                print("Audio captured! Processing...")
+                
+                try:
+                    text = recognizer.recognize_google(audio)
+                    print(f"\nYou said: {text}")
+                    return text
+                except sr.UnknownValueError:
+                    print("Sorry, I couldn't understand that. Please try again.")
+                    return None
+                except sr.RequestError as e:
+                    print(f"Could not request results; {e}")
+                    print("Please check your internet connection.")
+                    return None
+            except Exception as e:
+                print(f"Error capturing audio: {str(e)}")
+                return None
+    except Exception as e:
+        print(f"Error initializing microphone: {str(e)}")
+        return None
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -76,66 +108,23 @@ def speak(text):
     """Convert text to speech using macOS's say command."""
     subprocess.run(['say', text])
 
-def keyboard_input_thread():
-    """Thread function to handle keyboard input."""
-    while True:
-        try:
-            text = input()
-            input_queue.put(text)
-            if text == "STOP":
-                break
-        except EOFError:
-            break
-
-def listen():
-    """Listen for user input (both speech and keyboard)."""
-    print("Speak or type your input (type 'STOP' to end the session)...")
-    
-    # Start keyboard input thread
-    keyboard_thread = threading.Thread(target=keyboard_input_thread)
-    keyboard_thread.daemon = True
-    keyboard_thread.start()
-    
-    with sr.Microphone() as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source)
-        
-        try:
-            # Wait for either speech or keyboard input
-            audio = recognizer.listen(source, timeout=1)
-            text = recognizer.recognize_google(audio)
-            print(f"You said: {text}")
-            return text
-        except sr.WaitTimeoutError:
-            # Check for keyboard input
-            try:
-                text = input_queue.get_nowait()
-                print(f"You typed: {text}")
-                return text
-            except queue.Empty:
-                return None
-        except sr.UnknownValueError:
-            print("Sorry, I couldn't understand that.")
-            return None
-        except sr.RequestError as e:
-            print(f"Could not request results; {e}")
-            return None
-
 def main():
     conversation_history = []
     full_transcript = []
     
     print("Starting medical consultation simulation...")
-    print("You can speak or type your responses. Type 'STOP' to end the session and get feedback.")
+    print("You can speak to the patient. Speak clearly and naturally.")
+    print("Type 'stop' to end the session and get feedback.")
     speak("Hello, I'm your patient today. How can I help you?")
     
     while True:
         # Get user input
         user_input = listen()
         if user_input is None:
+            print("Let's try again...")
             continue
             
-        if user_input == "STOP":
+        if user_input.lower() in ['quit', 'exit', 'end', 'stop']:
             print("\nEnding consultation...")
             break
             
@@ -143,7 +132,7 @@ def main():
         
         # Get patient response
         patient_response = get_patient_response(user_input, conversation_history)
-        print(f"Patient: {patient_response}")
+        print(f"\nPatient: {patient_response}")
         speak(patient_response)
         
         full_transcript.append(f"Patient: {patient_response}")
