@@ -5,12 +5,17 @@ from dotenv import load_dotenv
 import json
 import time
 import subprocess
+import threading
+import queue
 
 # Load environment variables
 load_dotenv()
 
 # Initialize speech recognizer
 recognizer = sr.Recognizer()
+
+# Create a queue for keyboard input
+input_queue = queue.Queue()
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -71,29 +76,57 @@ def speak(text):
     """Convert text to speech using macOS's say command."""
     subprocess.run(['say', text])
 
+def keyboard_input_thread():
+    """Thread function to handle keyboard input."""
+    while True:
+        try:
+            text = input()
+            input_queue.put(text)
+            if text == "STOP":
+                break
+        except EOFError:
+            break
+
 def listen():
-    """Listen for user input and convert to text."""
+    """Listen for user input (both speech and keyboard)."""
+    print("Speak or type your input (type 'STOP' to end the session)...")
+    
+    # Start keyboard input thread
+    keyboard_thread = threading.Thread(target=keyboard_input_thread)
+    keyboard_thread.daemon = True
+    keyboard_thread.start()
+    
     with sr.Microphone() as source:
         print("Listening...")
         recognizer.adjust_for_ambient_noise(source)
-        audio = recognizer.listen(source)
         
-    try:
-        text = recognizer.recognize_google(audio)
-        print(f"You said: {text}")
-        return text
-    except sr.UnknownValueError:
-        print("Sorry, I couldn't understand that.")
-        return None
-    except sr.RequestError as e:
-        print(f"Could not request results; {e}")
-        return None
+        try:
+            # Wait for either speech or keyboard input
+            audio = recognizer.listen(source, timeout=1)
+            text = recognizer.recognize_google(audio)
+            print(f"You said: {text}")
+            return text
+        except sr.WaitTimeoutError:
+            # Check for keyboard input
+            try:
+                text = input_queue.get_nowait()
+                print(f"You typed: {text}")
+                return text
+            except queue.Empty:
+                return None
+        except sr.UnknownValueError:
+            print("Sorry, I couldn't understand that.")
+            return None
+        except sr.RequestError as e:
+            print(f"Could not request results; {e}")
+            return None
 
 def main():
     conversation_history = []
     full_transcript = []
     
     print("Starting medical consultation simulation...")
+    print("You can speak or type your responses. Type 'STOP' to end the session and get feedback.")
     speak("Hello, I'm your patient today. How can I help you?")
     
     while True:
@@ -102,7 +135,8 @@ def main():
         if user_input is None:
             continue
             
-        if user_input.lower() in ['quit', 'exit', 'end', 'stop']:
+        if user_input == "STOP":
+            print("\nEnding consultation...")
             break
             
         full_transcript.append(f"Doctor: {user_input}")
@@ -121,17 +155,20 @@ def main():
         ])
     
     # Get EPA feedback
-    transcript_text = "\n".join(full_transcript)
-    feedback = get_epa_feedback(transcript_text)
-    
-    print("\n=== EPA Feedback ===")
-    print(feedback)
-    
-    # Save transcript and feedback
-    with open("consultation_transcript.txt", "w") as f:
-        f.write(transcript_text)
-        f.write("\n\n=== EPA Feedback ===\n")
-        f.write(feedback)
+    if full_transcript:
+        transcript_text = "\n".join(full_transcript)
+        feedback = get_epa_feedback(transcript_text)
+        
+        print("\n=== EPA Feedback ===")
+        print(feedback)
+        
+        # Save transcript and feedback
+        with open("consultation_transcript.txt", "w") as f:
+            f.write(transcript_text)
+            f.write("\n\n=== EPA Feedback ===\n")
+            f.write(feedback)
+    else:
+        print("No conversation recorded. Ending session without feedback.")
 
 if __name__ == "__main__":
     main() 

@@ -1,10 +1,11 @@
 # Medical Interaction Simulator
 
-A speech-to-speech interaction system that simulates a medical consultation with an AI patient and provides EPA-based feedback using local LLMs via Ollama.
+A speech-to-speech/text interaction system that simulates a medical consultation with an AI patient and provides EPA-based feedback using local LLMs via Ollama.
 
 ## Features
 
 - Real-time speech-to-text and text-to-speech interaction
+- Support for both voice and keyboard input
 - AI-powered patient simulation using local LLMs
 - EPA (Entrustable Professional Activities) based feedback
 - Conversation transcript saving
@@ -12,21 +13,43 @@ A speech-to-speech interaction system that simulates a medical consultation with
 
 ## Prerequisites
 
+### System Requirements
 - Python 3.8 or higher
 - Ollama installed and running locally
-- Microphone
-- Speakers
+- Microphone (for speech input)
+- Speakers (for audio output)
+
+### System Dependencies
+On macOS:
+```bash
+# Install Homebrew if you haven't already
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install required system dependencies
+brew install portaudio  # Required for PyAudio
+brew install flac      # Required for speech recognition
+```
+
+On Linux (Ubuntu/Debian):
+```bash
+sudo apt-get update
+sudo apt-get install portaudio19-dev python3-pyaudio flac
+```
 
 ## Installation
 
 1. Install Ollama:
    - Visit [Ollama's official website](https://ollama.ai/) and follow the installation instructions for your platform
-   - After installation, pull the desired model (e.g., llama2):
+   - After installation, pull the llama2 model:
      ```bash
      ollama pull llama2
      ```
 
-2. Clone this repository
+2. Clone this repository:
+   ```bash
+   git clone <repository-url>
+   cd medical-interaction-simulator
+   ```
 
 3. Install the required Python dependencies:
    ```bash
@@ -42,16 +65,20 @@ A speech-to-speech interaction system that simulates a medical consultation with
    python app.py
    ```
 
-3. Speak to the AI patient when prompted
+3. Interact with the patient:
+   - You can either speak your responses (wait for "Listening...")
+   - OR type your responses and press Enter
+   - The patient will respond both verbally and in text
 
-4. The conversation will be saved in `consultation_transcript.txt`
-
-5. To end the session, say "quit", "exit", "end", or "stop"
+4. End the session:
+   - Type "STOP" (in uppercase) to end the consultation
+   - You will receive EPA-based feedback on your interaction
+   - The conversation transcript and feedback will be saved in `consultation_transcript.txt`
 
 ## Customization
 
 You can modify the following in `app.py`:
-- Change the model by modifying the `model` parameter in `get_patient_response` and `get_epa_feedback` functions
+- Change the Ollama model by modifying the `model` parameter in `get_patient_response` and `get_epa_feedback` functions
 - Adjust the patient's characteristics by modifying the `PATIENT_PROMPT`
 - Customize the EPA feedback criteria in `EPA_FEEDBACK_PROMPT`
 
@@ -64,10 +91,26 @@ The feedback system evaluates:
 - Patient-centered care
 - Professionalism
 
+## Troubleshooting
+
+1. If you get a PyAudio error:
+   - Make sure you have installed portaudio (see System Dependencies)
+   - Try reinstalling PyAudio: `pip install --force-reinstall pyaudio`
+
+2. If speech recognition isn't working:
+   - Check if your microphone is properly configured in system settings
+   - Ensure FLAC is installed (see System Dependencies)
+   - Try using keyboard input as an alternative
+
+3. If Ollama isn't responding:
+   - Ensure Ollama is running (`ollama serve`)
+   - Verify the llama2 model is installed (`ollama list`)
+   - Check Ollama logs for any errors
+
 ## Notes
 
-- Make sure your microphone is properly configured
-- Speak clearly and at a moderate pace
-- The system uses Google's speech recognition service
+- The first response from the LLM might take a few seconds as it loads the model
+- Speech recognition works best in a quiet environment
+- Speak clearly and at a moderate pace for best results
 - All conversations are saved locally for review
 - You can use any model available in Ollama by changing the model name in the code 
