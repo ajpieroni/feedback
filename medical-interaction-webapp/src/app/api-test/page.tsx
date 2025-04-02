@@ -11,7 +11,7 @@ export default function ApiTest() {
   const [isFeedbackLoading, setIsFeedbackLoading] = useState(false);
   
   const testMessages = [
-    { role: "patient", content: "Hello, I'm Mr. Johnson. I've been having a sore throat for the past couple of days." },
+    { role: "patient", content: "Hello, nice to see you." },
     { role: "user", content: "Hello Mr. Johnson, I'm Dr. Smith. I'm sorry to hear you're not feeling well. Can you tell me more about your sore throat?" },
     { role: "patient", content: "It feels scratchy and burns when I swallow. It's getting worse." }
   ];

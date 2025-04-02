@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 // Debug helper function that logs with timestamps
-const debugLog = (message: string, data?: any) => {
+const debugLog = (message: string, ...args: any[]) => {
   const timestamp = new Date().toISOString().substring(11, 23); // HH:MM:SS.mmm format
-  console.log(`[${timestamp}] ${message}`, data !== undefined ? data : '');
+  console.log(`[${timestamp}] ${message}`, ...args);
 };
 
 export default function Simulator() {
@@ -15,7 +15,7 @@ export default function Simulator() {
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false); // Start with microphone off
   const [messages, setMessages] = useState<{ role: "user" | "patient"; content: string }[]>([
-    { role: "patient", content: "Hello, I'm Mr. Johnson. I've been having a sore throat for the past couple of days." }
+    { role: "patient", content: "Hello, nice to see you." }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -23,9 +23,14 @@ export default function Simulator() {
   const [feedback, setFeedback] = useState("");
   const [apiErrors, setApiErrors] = useState<string[]>([]);
   const [needsUserInteraction, setNeedsUserInteraction] = useState(true); // Track if we need user interaction
+  const [initialGreetingPlayed, setInitialGreetingPlayed] = useState(false); // Track if greeting has been played
+  const [micVolume, setMicVolume] = useState(0); // Track microphone volume level
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
   
   // Speech recognition setup
   const SpeechRecognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
@@ -77,11 +82,15 @@ export default function Simulator() {
         debugLog('Audio started playing');
         setIsSpeaking(true);
         
-        // Ensure speech recognition is stopped when patient speaks
+        // Always stop speech recognition when patient speaks
         if (recognition.current && isListening) {
           debugLog('Making sure speech recognition is stopped while audio plays');
-          recognition.current.stop();
-          setIsListening(false);
+          try {
+            recognition.current.stop();
+            setIsListening(false);
+          } catch (error) {
+            debugLog('Error stopping speech recognition during audio playback:', error);
+          }
         }
       });
       
@@ -89,11 +98,29 @@ export default function Simulator() {
         debugLog('Audio finished playing');
         setIsSpeaking(false);
         
-        // Add a short delay before allowing speech recognition again
+        // Add a delay before re-enabling speech recognition
         // This helps prevent the last bit of audio from being picked up
         setTimeout(() => {
-          debugLog('Audio playback fully complete, recognition can be re-enabled');
-        }, 500);
+          // Only restart speech recognition if we're not already in the process of speaking
+          // and user interaction has been completed
+          if (!needsUserInteraction && !isSpeaking && recognition.current && SpeechRecognition) {
+            debugLog('Audio playback fully complete, attempting to restart speech recognition');
+            try {
+              recognition.current.start();
+              setIsListening(true);
+              debugLog('Successfully restarted speech recognition after audio');
+            } catch (error) {
+              debugLog('Error restarting speech recognition after audio:', error);
+              setApiErrors(prev => [...prev, `Error restarting recognition: ${(error as Error).message}`]);
+            }
+          } else {
+            debugLog('Not auto-restarting speech recognition after audio', {
+              needsUserInteraction,
+              isSpeaking,
+              recognitionExists: !!recognition.current
+            });
+          }
+        }, 1000); // Longer delay to ensure no audio feedback
       });
       
       audioRef.current.addEventListener('error', (e) => {
@@ -124,36 +151,99 @@ export default function Simulator() {
   useEffect(() => {
     if (SpeechRecognition) {
       debugLog('Setting up speech recognition');
-      recognition.current = new SpeechRecognition();
-      recognition.current.continuous = true;
-      recognition.current.interimResults = true;
       
-      recognition.current.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map((result) => result.transcript)
-          .join("");
+      // Create a new instance of speech recognition
+      try {
+        recognition.current = new SpeechRecognition();
+        recognition.current.continuous = true;
+        recognition.current.interimResults = true;
+        
+        recognition.current.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((result: any) => result[0])
+            .map((result) => result.transcript)
+            .join("");
           
-        debugLog('Speech recognition result:', transcript);
-        setInput(transcript);
-      };
+          debugLog('Speech recognition result:', transcript);
+          
+          // Only update the input if we're not currently playing audio
+          // This helps prevent feedback loops
+          if (!isSpeaking) {
+            setInput(transcript);
+          } else {
+            debugLog('Ignoring speech input while patient is speaking');
+          }
+        };
 
-      recognition.current.onend = () => {
-        debugLog('Speech recognition ended, isListening:', isListening);
-        if (isListening) {
-          debugLog('Restarting speech recognition');
-          recognition.current.start();
-        }
-      };
+        recognition.current.onend = () => {
+          debugLog('Speech recognition ended, isListening state:', isListening);
+          
+          // Only restart if we intend to be listening and we're not speaking
+          if (isListening && !isSpeaking) {
+            debugLog('Restarting speech recognition');
+            try {
+              // Small delay to prevent rapid restarts
+              setTimeout(() => {
+                if (isListening && !isSpeaking) {
+                  recognition.current.start();
+                  debugLog('Speech recognition restarted successfully');
+                }
+              }, 300);
+            } catch (error) {
+              debugLog('Error restarting speech recognition:', error);
+              setApiErrors(prev => [...prev, `Error restarting speech recognition: ${(error as Error).message}`]);
+              // Reset listening state if we can't restart
+              setIsListening(false);
+            }
+          } else {
+            debugLog('Not restarting speech recognition because', 
+              isListening ? 'patient is speaking' : 'listening is disabled');
+          }
+        };
 
-      recognition.current.onerror = (event: any) => {
-        debugLog('Speech recognition error:', event.error);
-        setApiErrors(prev => [...prev, `Speech recognition error: ${event.error}`]);
-      };
+        recognition.current.onerror = (event: any) => {
+          debugLog('Speech recognition error:', event.error);
+          setApiErrors(prev => [...prev, `Speech recognition error: ${event.error}`]);
+          
+          // Handle specific errors
+          if (event.error === 'not-allowed') {
+            debugLog('Microphone permission denied');
+            setIsListening(false);
+            setApiErrors(prev => [...prev, 'Microphone permission denied. Please allow microphone access and reload the page.']);
+          } else if (event.error === 'network') {
+            debugLog('Network error in speech recognition');
+            // Don't immediately restart on network errors
+            setIsListening(false);
+          } else if (event.error === 'aborted') {
+            // This is expected when we manually stop recognition
+            debugLog('Speech recognition was aborted');
+          }
+        };
+        
+        debugLog('Speech recognition setup complete');
+      } catch (error) {
+        debugLog('Error setting up speech recognition:', error);
+        setApiErrors(prev => [...prev, `Speech recognition setup error: ${(error as Error).message}`]);
+      }
     } else {
       debugLog('Speech recognition not available in this browser');
+      setApiErrors(prev => [...prev, 'Speech recognition is not supported in this browser']);
     }
-  }, [SpeechRecognition, isListening]);
+    
+    // Cleanup function
+    return () => {
+      if (recognition.current) {
+        try {
+          if (isListening) {
+            recognition.current.stop();
+          }
+          debugLog('Speech recognition cleanup');
+        } catch (error) {
+          debugLog('Error during speech recognition cleanup:', error);
+        }
+      }
+    };
+  }, [SpeechRecognition, isListening, isSpeaking]); // Added isSpeaking as dependency
 
   // Scroll to bottom of message list when new messages arrive
   useEffect(() => {
@@ -161,21 +251,22 @@ export default function Simulator() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Speak initial greeting when component loads - but only after user interaction
+  // Speak initial greeting when component loads - but only after user interaction and only once
   useEffect(() => {
     // Don't auto-play greeting until user has interacted with the page
-    if (needsUserInteraction) {
-      debugLog('Waiting for user interaction before playing initial greeting');
+    if (needsUserInteraction || initialGreetingPlayed) {
+      debugLog('Skipping initial greeting - waiting for interaction or already played');
       return;
     }
     
-    // Speak the initial greeting after user interaction
+    // Speak the initial greeting after user interaction (only once)
     const initialGreeting = messages[0]?.content;
     if (initialGreeting) {
       debugLog('Speaking initial greeting after user interaction');
       speakWithElevenLabs(initialGreeting);
+      setInitialGreetingPlayed(true); // Mark as played
     }
-  }, [needsUserInteraction, messages]); // Run when needsUserInteraction changes to false
+  }, [needsUserInteraction, initialGreetingPlayed]); // Removed messages dependency
 
   const toggleListening = () => {
     // Handle the first user interaction
@@ -248,7 +339,7 @@ export default function Simulator() {
       }
       
       // Log response headers for debugging
-      const headers = {};
+      const headers: Record<string, string> = {};
       response.headers.forEach((value, key) => {
         headers[key] = value;
       });
@@ -328,25 +419,38 @@ export default function Simulator() {
     let userMessage = input.trim();
     debugLog('Preparing to send message:', userMessage);
     
-    // Check if the input might be accidentally captured from patient's response
-    const patientPrefix = "Mr. Johnson:";
-    if (userMessage.startsWith(patientPrefix)) {
-      debugLog('Detected patient prefix in input, removing it');
-      userMessage = userMessage.substring(patientPrefix.length).trim();
-    }
+    // More aggressive checks for accidentally captured patient speech
+    const lastPatientMessages = messages
+      .filter(m => m.role === "patient")
+      .slice(-2)
+      .map(m => m.content);
     
-    // Also check for partial matches with recent patient responses
-    const lastPatientResponse = messages.filter(m => m.role === "patient").pop()?.content;
-    if (lastPatientResponse && userMessage.length > 15) {
-      if (lastPatientResponse.includes(userMessage) || 
-          userMessage.includes(lastPatientResponse)) {
+    // Check for significant overlap with any recent patient responses
+    let isProbablyFeedback = false;
+    for (const patientMsg of lastPatientMessages) {
+      // Convert both to lowercase for better matching
+      const patientMsgLower = patientMsg.toLowerCase();
+      const userMsgLower = userMessage.toLowerCase();
+      
+      // Check for substantial overlap
+      if (
+        // Check if user message is a substring of patient's message
+        (patientMsgLower.includes(userMsgLower) && userMessage.length > 10) || 
+        // Check if patient's message is a substring of user message
+        (userMsgLower.includes(patientMsgLower) && patientMsgLower.length > 10) ||
+        // Check for significant word overlap
+        calculateWordOverlap(patientMsgLower, userMsgLower) > 0.7
+      ) {
+        isProbablyFeedback = true;
         debugLog('Detected probable feedback loop - input matches patient response');
         setApiErrors(prev => [...prev, 
-          'Potential feedback detected: Your input appears to match the patient\'s last response. ' +
-          'This often happens when speech recognition picks up audio from speakers. ' +
-          'Try using headphones or typing your responses.'
+          'Feedback loop detected: Your input appears to match the patient\'s response. ' +
+          'This happens when your microphone picks up audio from your speakers. ' +
+          'Please use headphones or type your responses.'
         ]);
-        // Don't return - still allow the message to be sent after warning
+        // Clear the input field when feedback is detected
+        setInput("");
+        return; // Don't send the message
       }
     }
     
@@ -451,6 +555,23 @@ export default function Simulator() {
     }
   };
 
+  // Helper function to calculate word overlap ratio between two strings
+  const calculateWordOverlap = (str1: string, str2: string): number => {
+    const words1 = str1.split(/\s+/).filter(w => w.length > 3);
+    const words2 = str2.split(/\s+/).filter(w => w.length > 3);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    let matchCount = 0;
+    for (const word of words1) {
+      if (words2.includes(word)) {
+        matchCount++;
+      }
+    }
+    
+    return matchCount / Math.min(words1.length, words2.length);
+  };
+
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,6 +596,106 @@ export default function Simulator() {
       }
     }, 500);
   };
+
+  // Setup microphone visualization when recognition is active
+  useEffect(() => {
+    if (!isListening || isSpeaking || needsUserInteraction) {
+      // Clean up audio processing if no longer listening
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        try {
+          audioContextRef.current.suspend();
+        } catch (error) {
+          debugLog('Error suspending audio context:', error);
+        }
+      }
+      return;
+    }
+
+    // Only setup audio visualization if we're actively listening
+    let animationFrame: number;
+    
+    const setupMicVisualization = async () => {
+      try {
+        if (!navigator.mediaDevices) {
+          debugLog('Media devices not supported in this browser');
+          return;
+        }
+        
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+
+        // Only get the stream if we don't already have one
+        if (!micStreamRef.current) {
+          debugLog('Getting microphone stream for visualization');
+          micStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        
+        if (!analyserRef.current) {
+          const source = audioContextRef.current.createMediaStreamSource(micStreamRef.current);
+          analyserRef.current = audioContextRef.current.createAnalyser();
+          analyserRef.current.fftSize = 256;
+          analyserRef.current.smoothingTimeConstant = 0.8;
+          source.connect(analyserRef.current);
+        }
+        
+        const analyser = analyserRef.current;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        const updateVolume = () => {
+          if (!isListening || isSpeaking) return;
+          
+          analyser.getByteFrequencyData(dataArray);
+          // Calculate volume level from frequency data
+          const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+          const volume = Math.min(100, Math.round((average / 256) * 100));
+          setMicVolume(volume);
+          
+          // Continue animation loop if still listening
+          if (isListening && !isSpeaking) {
+            animationFrame = requestAnimationFrame(updateVolume);
+          }
+        };
+        
+        animationFrame = requestAnimationFrame(updateVolume);
+        debugLog('Microphone visualization setup complete');
+        
+      } catch (error) {
+        debugLog('Error setting up mic visualization:', error);
+        setApiErrors(prev => [...prev, `Microphone visualization error: ${(error as Error).message}`]);
+      }
+    };
+    
+    setupMicVisualization();
+    
+    // Cleanup function
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [isListening, isSpeaking, needsUserInteraction]);
+
+  // Cleanup audio context when component unmounts
+  useEffect(() => {
+    return () => {
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+        micStreamRef.current = null;
+      }
+      
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      analyserRef.current = null;
+    };
+  }, []);
 
   if (sessionEnded) {
     return (
@@ -546,6 +767,97 @@ export default function Simulator() {
               Start Simulation
             </button>
             <p className="text-sm mt-2">This interaction is needed to enable audio and speech features in your browser</p>
+            <p className="text-sm mt-2 font-bold">⚠️ For best results, please use headphones to prevent feedback</p>
+            
+            {/* Microphone test feature */}
+            <div className="mt-4 border-t border-yellow-300 pt-3 w-full">
+              <p className="text-sm font-medium mb-2">Not working? Test your microphone:</p>
+              <button
+                onClick={async () => {
+                  try {
+                    debugLog('Testing microphone access');
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    // Setup temporary audio context to test microphone
+                    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                    const analyser = audioContext.createAnalyser();
+                    const source = audioContext.createMediaStreamSource(stream);
+                    source.connect(analyser);
+                    analyser.fftSize = 256;
+                    
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    let testVolume = 0;
+                    
+                    // Start checking for audio input
+                    const testMicInterval = setInterval(() => {
+                      analyser.getByteFrequencyData(dataArray);
+                      const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                      testVolume = Math.min(100, Math.round((average / 256) * 100));
+                      setMicVolume(testVolume); // Use the same state for visualization
+                      
+                      if (testVolume > 10) {
+                        clearInterval(testMicInterval);
+                        debugLog('Microphone test successful, volume detected:', testVolume);
+                        setApiErrors(prev => [...prev, `Microphone test successful! Volume level: ${testVolume}%`]);
+                        
+                        // Clean up test resources
+                        setTimeout(() => {
+                          stream.getTracks().forEach(track => track.stop());
+                          audioContext.close();
+                        }, 1000);
+                      }
+                    }, 100);
+                    
+                    // Stop checking after 5 seconds if no sound detected
+                    setTimeout(() => {
+                      clearInterval(testMicInterval);
+                      if (testVolume <= 10) {
+                        debugLog('Microphone test failed, no volume detected');
+                        setApiErrors(prev => [...prev, 'Microphone test failed. No audio detected. Please check your microphone settings.']);
+                      }
+                      
+                      // Clean up test resources
+                      stream.getTracks().forEach(track => track.stop());
+                      audioContext.close();
+                    }, 5000);
+                    
+                  } catch (error) {
+                    debugLog('Error testing microphone:', error);
+                    setApiErrors(prev => [...prev, `Microphone test error: ${(error as Error).message}`]);
+                  }
+                }}
+                className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+              >
+                Test Microphone
+              </button>
+              
+              {/* Show temporary mic level during test */}
+              {micVolume > 0 && needsUserInteraction && (
+                <div className="mt-2">
+                  <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full ${micVolume > 30 ? (micVolume > 70 ? 'bg-green-500' : 'bg-green-400') : 'bg-blue-500'}`}
+                      style={{ width: `${micVolume}%`, transition: 'width 0.1s ease' }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs mt-1">
+                    <span>Low</span>
+                    <span>Level: {micVolume}%</span>
+                    <span>High</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Headphone recommendation if not using first-time interaction prompt */}
+        {!needsUserInteraction && apiErrors.length === 0 && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded mb-4 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm">For best results, please use headphones to prevent the microphone from picking up audio output</p>
           </div>
         )}
         
@@ -564,14 +876,29 @@ export default function Simulator() {
         
         {/* Microphone active indicator */}
         {isListening && !isSpeaking && !needsUserInteraction && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4 flex items-center">
-            <div className="mr-2 relative">
-              <span className="flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-              </span>
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4">
+            <div className="flex items-center mb-2">
+              <div className="mr-2 relative">
+                <span className="flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                </span>
+              </div>
+              <p>Microphone active - speak clearly to enter your response</p>
             </div>
-            <p>Microphone active - speak clearly to enter your response</p>
+            
+            {/* Microphone volume indicator */}
+            <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden mt-2">
+              <div 
+                className={`h-full ${micVolume > 30 ? (micVolume > 70 ? 'bg-green-500' : 'bg-green-400') : 'bg-blue-500'}`}
+                style={{ width: `${micVolume}%`, transition: 'width 0.1s ease' }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs mt-1">
+              <span>Low</span>
+              <span>Mic Level: {micVolume}%</span>
+              <span>High</span>
+            </div>
           </div>
         )}
         
