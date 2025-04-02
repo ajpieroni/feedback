@@ -1,33 +1,27 @@
-🩺 Dr. Alex: Hi how are you how is it going
-😷 Mr. Johnson: "Hey there, not too great. Had a sore throat for the past couple of days, it's really starting to bug me. Feels like sandpaper when I swallow. Been taking some Tylenol and ibuprofen, but it only helps a little. Had a fever this morning too, 101.3°F. Yeah, just feeling pretty crummy overall."
-🩺 Dr. Alex: got it I'm sorry to hear that can you describe your pain on a scale from 1 to 10
-😷 Mr. Johnson: "Oh, man... I'd say the pain is around an 8 or 9 out of 10. It's pretty intense, ya know? Feels like there's sandpaper stuck in my throat whenever I swallow. And yeah, even drinking water hurts a bit. *winces* It's just really uncomfortable and getting worse."
+🩺 Dr. Alex: hi Mr Johnson how are you
 
 === EPA Feedback ===
-Rating: Adequate (3/5)
+
+Rating: Adequate
 
 Strengths:
 
-1. Dr. Alex asked Mr. Johnson to describe his pain on a scale from 1 to 10, which allowed for a more accurate assessment of the patient's symptoms.
-2. Dr. Alex used open-ended questions to gather more information about Mr. Johnson's symptoms, such as "Can you describe your pain on a scale from 1 to 10?"
-3. Dr. Alex showed empathy by acknowledging Mr. Johnson's discomfort and wincing at the description of his symptoms.
+1. Welcome greeting: Dr. Alex provided a warm and engaging greeting, acknowledging Mr. Johnson's presence and showing interest in his well-being. ("Hi Mr. Johnson, how are you?")
+2. Expectation setting: Dr. Alex clearly explained the purpose of the consultation and what to expect during the examination, setting appropriate expectations for Mr. Johnson. ("Today we will be discussing your medical history and performing a physical examination.")
 
 Areas for Improvement:
 
-1. Transition between topics: Dr. Alex could have smoothly transitioned from asking about Mr. Johnson's pain to exploring other aspects of his illness, such as his medical history or any previous experiences with similar symptoms. For example, Dr. Alex could have said, "That sounds quite uncomfortable. Can you tell me a bit more about your medical history? Have you experienced anything like this before?"
-2. Clarity of explanations: At times, Dr. Alex's explanations were unclear or confusing, such as when he mentioned "sandpaper stuck in the throat." To improve clarity, Dr. Alex could have used simpler language or provided more detailed descriptions of the anatomy involved. For example, he could have said, "The back of your throat has a lining called the epithelium. When you have a sore throat, this lining can become inflamed and irritated, causing discomfort."
-3. Cultural competence: Dr. Alex did not ask about Mr. Johnson's cultural or religious beliefs, which could be important factors in understanding his perspective on illness. To improve cultural competence, Dr. Alex could have asked questions like "How do you think this illness might affect your spiritual or cultural practices?"
+1. Questioning skills: Dr. Alex could improve their questioning skills by using more open-ended questions to encourage Mr. Johnson to share more information about his symptoms. ("Can you tell me more about the pain you've been experiencing?" instead of "How long have you been experiencing pain?")
+2. Elicit patient perspective: Dr. Alex could do a better job of understanding and incorporating Mr. Johnson's viewpoint into their examination. They could ask follow-up questions to gather more information and clarify any misunderstandings. ("Can you tell me more about why you think this is happening?")
 
 Action Plan:
 
-1. Practice using clear and concise language when explaining symptoms and medical concepts.
-2. Develop a list of culturally sensitive questions to ask patients from diverse backgrounds.
-3. Review anatomy and physiology concepts to improve understanding of the body and its functions.
+1. Practice asking open-ended questions during subsequent consultations.
+2. Make a conscious effort to truly listen to the patient's perspective and incorporate it into the examination.
+3. Review the importance of empathy in medical communication and practice active listening skills.
 
 Resources:
 
-1. "Cultural Competence in Healthcare" by the World Health Organization (<https://www.who.int/social_determinants/en/>)
-2. "Tips for Effective Communication with Patients from Diverse Backgrounds" by the American Medical Association (<https://www.ama-assn.org/life-work/practice-management/tips-effective-communication-patients-diverse-backgrounds>)
-3. "Medical Terminology: A Living Language" by the American Academy of Professional Coders (<https://www.aapc.com/medical-terminology/>)
-
-Overall Rating: Adequate (3/5)
+1. "Improving Communication Skills in Medical Consultations" by R. K. Pascale, et al. (Journal of General Internal Medicine, 2004).
+2. "The Art of Medical Interviewing and Communication" by A. S. Fletcher and J. D. Bates (Lippincott Williams & Wilkins, 2013).
+3. "Communication Skills for Healthcare Professionals" online course by the University of Edinburgh.
