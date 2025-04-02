@@ -99,9 +99,9 @@ def create_recognizer():
     r = sr.Recognizer()
     r.energy_threshold = 300  # Increased for better detection
     r.dynamic_energy_threshold = True
-    r.pause_threshold = 0.8
-    r.phrase_threshold = 0.3
-    r.non_speaking_duration = 0.5
+    r.pause_threshold = 1.0  # Increased to allow for more natural pauses
+    r.phrase_threshold = 0.5  # Increased for better phrase detection
+    r.non_speaking_duration = 0.8  # Increased to not cut off speech too early
     return r
 
 def listen():
@@ -119,18 +119,23 @@ def listen():
         # Create a new recognizer for each listen attempt
         recognizer = create_recognizer()
         
-        # Use MacBook Pro Microphone (index 4)
-        mic_index = 4  # MacBook Pro Microphone
-        with sr.Microphone(device_index=mic_index) as mic:
-            print(f"\nListening using MacBook Pro Microphone... (speak now)")
+        # List microphones to help with debugging
+        print("\nAvailable microphones:")
+        mics = sr.Microphone.list_microphone_names()
+        for i, name in enumerate(mics):
+            print(f"{i}: {name}")
+        
+        # Use default microphone to avoid device index issues
+        print("\nUsing default microphone...")
+        with sr.Microphone() as mic:
             print("Adjusting for ambient noise...")
-            recognizer.adjust_for_ambient_noise(mic, duration=1)
+            recognizer.adjust_for_ambient_noise(mic, duration=2)  # Longer adjustment
             print("Ready! Speak clearly into the microphone...")
             
             try:
                 # Get the audio with longer timeouts
-                print("Waiting for speech... (say something)")
-                audio = recognizer.listen(mic, timeout=7, phrase_time_limit=10)
+                print("Listening for speech (speak clearly and a bit louder than normal)...")
+                audio = recognizer.listen(mic, timeout=10, phrase_time_limit=15)  # Longer timeouts
                 print("Audio captured! Processing...")
                 
                 try:
