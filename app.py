@@ -20,20 +20,21 @@ recognizer.dynamic_energy_threshold = True
 def listen():
     """Listen for user input and convert to text."""
     try:
-        # Explicitly use MacBook Pro Microphone (index 4)
-        with sr.Microphone(device_index=4) as source:
+        # Use a single microphone instance
+        with sr.Microphone(device_index=4) as mic:
             print("\nListening... (speak now)")
             print("Adjusting for ambient noise...")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
+            recognizer.adjust_for_ambient_noise(mic, duration=1)
             print("Ready! Speak clearly into the microphone...")
             
             try:
-                # Increased timeout to 10 seconds and added phrase_time_limit
-                audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+                # Get the audio with increased timeout and phrase time limit
+                audio = recognizer.listen(mic, timeout=10, phrase_time_limit=15)
                 print("Audio captured! Processing...")
                 
                 try:
                     text = recognizer.recognize_google(audio)
+                    print(f"\nYou said: {text}")
                     return text
                 except sr.UnknownValueError:
                     print("Sorry, I couldn't understand that. Please try again.")
@@ -46,7 +47,7 @@ def listen():
                 print("No speech detected. Please try again.")
                 return None
             except Exception as e:
-                print(f"Error capturing audio: {str(e)}")
+                print(f"\nError capturing audio: {str(e)}")
                 return None
     except Exception as e:
         print(f"Error initializing microphone: {str(e)}")
