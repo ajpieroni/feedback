@@ -131,6 +131,7 @@ def main():
         full_transcript.append(f"Doctor: {user_input}")
         
         # Get patient response
+        print("\nWaiting for patient to reply...")
         patient_response = get_patient_response(user_input, conversation_history)
         print(f"\nPatient: {patient_response}")
         speak(patient_response)
