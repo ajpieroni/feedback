@@ -124,38 +124,50 @@ def main():
             print("Let's try again...")
             continue
             
-        if user_input.lower() in ['quit', 'exit', 'end', 'stop']:
+        # Check for stop commands first
+        if any(cmd in user_input.lower() for cmd in ['quit', 'exit', 'end', 'stop']):
             print("\nEnding consultation...")
             break
             
         full_transcript.append(f"Doctor: {user_input}")
         
         # Get patient response
-        patient_response = get_patient_response(user_input, conversation_history)
-        print(f"\nPatient: {patient_response}")
-        speak(patient_response)
-        
-        full_transcript.append(f"Patient: {patient_response}")
-        
-        # Update conversation history
-        conversation_history.extend([
-            {"role": "user", "content": user_input},
-            {"role": "assistant", "content": patient_response}
-        ])
+        print("\nWaiting for patient to reply...")
+        try:
+            patient_response = get_patient_response(user_input, conversation_history)
+            print(f"\nPatient: {patient_response}")
+            speak(patient_response)
+            
+            full_transcript.append(f"Patient: {patient_response}")
+            
+            # Update conversation history
+            conversation_history.extend([
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": patient_response}
+            ])
+        except Exception as e:
+            print(f"\nError getting patient response: {str(e)}")
+            print("Ending consultation due to error...")
+            break
     
     # Get EPA feedback
     if full_transcript:
         transcript_text = "\n".join(full_transcript)
-        feedback = get_epa_feedback(transcript_text)
-        
-        print("\n=== EPA Feedback ===")
-        print(feedback)
-        
-        # Save transcript and feedback
-        with open("consultation_transcript.txt", "w") as f:
-            f.write(transcript_text)
-            f.write("\n\n=== EPA Feedback ===\n")
-            f.write(feedback)
+        try:
+            feedback = get_epa_feedback(transcript_text)
+            print("\n=== EPA Feedback ===")
+            print(feedback)
+            
+            # Save transcript and feedback
+            with open("consultation_transcript.txt", "w") as f:
+                f.write(transcript_text)
+                f.write("\n\n=== EPA Feedback ===\n")
+                f.write(feedback)
+        except Exception as e:
+            print(f"\nError getting feedback: {str(e)}")
+            print("Saving transcript without feedback...")
+            with open("consultation_transcript.txt", "w") as f:
+                f.write(transcript_text)
     else:
         print("No conversation recorded. Ending session without feedback.")
 
