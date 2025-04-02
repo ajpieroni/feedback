@@ -223,8 +223,13 @@ def get_epa_feedback(transcript):
     return response['message']['content']
 
 def speak(text):
-    """Convert text to speech using macOS's say command."""
-    subprocess.run(['say', text])
+    """Convert text to speech using macOS's say command with Daniel voice."""
+    try:
+        print(f"\nSpeaking: {text}")
+        subprocess.run(['say', '-v', 'Daniel', text])
+        print("Speech completed")
+    except Exception as e:
+        print(f"Error with speech: {e}")
 
 def main():
     conversation_history = []
@@ -234,8 +239,12 @@ def main():
     print("🩺 You are Dr. Alex, a medical student. Speak clearly and naturally.")
     print("🩺 Type 'stop' to end the session and get feedback.")
     
+    # Test speech synthesis
+    print("\nTesting speech synthesis...")
+    speak("Hello, this is a test.")
+    
     # Initial greeting
-    # print("\n🩺 Dr. Alex: Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
+    print("\nStarting consultation...")
     speak("Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
     
     while True:
@@ -256,6 +265,8 @@ def main():
         print("\n😷 Waiting for patient to reply...")
         patient_response = get_patient_response(user_input, conversation_history)
         print(f"\n😷 Mr. Johnson: {patient_response}")
+        
+        # Make the patient speak their response
         speak(patient_response)
         
         full_transcript.append(f"😷 Mr. Johnson: {patient_response}")
