@@ -1,21 +1,71 @@
-Doctor: hey how's it going I'm hoping to talk about
-Patient: "Hey there! Yeah, I'm doing alright, thanks for asking. *adjusts glasses* Just been feeling a bit off lately, you know? Got this mild headache that won't go away, and sometimes feel a little dizzy. It's been going on for about three days now. And to top it off, I'm just really tired all the time. *sigh* I mean, it's not like I have any major medical conditions or anything, but it's still pretty annoying. *rolls eyes*
-
-Oh, and by the way, do you take care of seasonal allergies? I get them sometimes this time of year. *sniffles* It's just a little inconvenient, you know?"
+🩺 Dr. Alex: hey Mr John how are you
+😷 Mr. Johnson: "Hey there, not great. Been dealing with a sore throat for a couple of days now. It's really scratchy and burns when I swallow. Taking some meds, but they only help a little. Had a fever this morning too. *coughs* Not feeling too good."
+🩺 Dr. Alex: how is the pain on a scale from 1 to
+😷 Mr. Johnson: "Oh, I'd say it's around a 7 or 8 out of 10. It's pretty uncomfortable and I can feel it even when I'm just talking. *pauses* Ugh, it even hurts when I swallow. Like, seriously hurts."
+🩺 Dr. Alex: dang I'm sorry that's really hard to hear
+😷 Mr. Johnson: "Thanks, man... *sighs* Yeah, it's been a real pain in the neck (no pun intended). I just want to feel better and go back to work. *glances down* But you know how it is with food preparation - gotta keep going even when you're not feeling your best."
 
 === EPA Feedback ===
-As a medical educator, I analyzed the transcript of the consultation between the doctor and the patient and provide feedback based on the Entrustable Professional Activities (EPA) guidelines. Here are my findings:
+Component 1: Introduction
 
-1. Communication skills: The doctor could improve their communication skills by actively listening to the patient's concerns, using empathetic language, and clarifying any unclear information. For example, the doctor could have said, "I see. So you're feeling a bit off lately with a mild headache that won't go away, dizziness, and excessive tiredness. Can you tell me more about when these symptoms started and if there are any triggers you've noticed?"
-2. History taking: The doctor could have taken a more detailed history by asking additional questions to gather more information about the patient's symptoms, such as their duration, severity, and any factors that may be contributing to them. For example, the doctor could have asked, "Can you tell me more about your headache? Is it located on one side of your head or both? Does it feel like a pressure or a sharp pain? And how long have you been experiencing this dizziness?"
-3. Clinical reasoning: The doctor could improve their clinical reasoning by considering the patient's symptoms in the context of their medical history and any potential underlying conditions. For example, the doctor could have asked, "Have you experienced anything like this before? And do you have any medical conditions that may be contributing to these symptoms?"
-4. Patient-centered care: The doctor could improve their patient-centered care by demonstrating empathy and respect for the patient's concerns. For example, the doctor could have said, "I understand how frustrating it must be to feel unwell like this. Let's work together to find a solution that works for you."
-5. Professionalism: The doctor could improve their professionalism by maintaining appropriate boundaries and using respectful language when interacting with the patient. For example, the doctor could have said, "I appreciate your willingness to share this information with me. Let's work together to find a solution that addresses your concerns."
+Rating: Fair
 
-Suggestions for improvement:
+Specific examples: Dr. Alex introduced himself properly and asked Mr. Johnson about his symptoms, but did not take the time to fully understand Mr. Johnson's perspective or explore the impact of illness on his well-being.
 
-* Use active listening skills by paraphrasing and summarizing the patient's concerns to ensure understanding.
-* Ask open-ended questions to gather more information about the patient's symptoms and medical history.
-* Consider potential underlying conditions based on the patient's symptoms and medical history.
-* Demonstrate empathy and respect for the patient's concerns.
-* Maintain appropriate boundaries and use respectful language when interacting with the patient.
+Recommendations for improvement: Take a few moments at the beginning of the consultation to ask open-ended questions and actively listen to Mr. Johnson's response, in order to better understand his explanatory model and establish a partnership.
+
+Component 2: Questioning Skills
+
+Rating: Adequate
+
+Specific examples: Dr. Alex asked some open-ended questions to gather more information about Mr. Johnson's symptoms, but there were some instances of interruptions and the questioning could have been better organized.
+
+Recommendations for improvement: Practice active listening and ask follow-up questions to clarify and expand on Mr. Johnson's responses, while avoiding interruptions and maintaining a smooth flow of questioning.
+
+Component 3: Elicit Patient Perspective
+
+Rating: Adequate
+
+Specific examples: Dr. Alex made some efforts to understand Mr. Johnson's explanatory model and explore the impact of illness on his well-being, but could have done more to incorporate his viewpoint.
+
+Recommendations for improvement: Take the time to actively listen to Mr. Johnson's responses and ask follow-up questions to fully understand his perspective, and work to incorporate his viewpoint into the consultation.
+
+Component 4: Verbal Communication
+
+Rating: Adequate
+
+Specific examples: Dr. Alex used some medical jargon and organized his thoughts well, but could have improved his tone of speech and used more empathetic language when discussing Mr. Johnson's symptoms.
+
+Recommendations for improvement: Practice using more empathetic language and a softer tone of speech to make the patient feel more comfortable and cared for, while avoiding overly technical language that may be difficult for the patient to understand.
+
+Component 5: Non-verbal Communication
+
+Rating: Fair
+
+Specific examples: Dr. Alex showed some attentiveness and used appropriate non-verbal cues during the consultation, but could have shown more empathy and respect towards Mr. Johnson.
+
+Recommendations for improvement: Practice using more empathetic non-verbal cues, such as maintaining eye contact and displaying a caring demeanor, to show respect and empathy towards the patient.
+
+Component 6: Empathy
+
+Rating: Adequate
+
+Specific examples: Dr. Alex responded appropriately to Mr. Johnson's emotional cues and showed some empathy towards his pain and discomfort, but could have done more to actively listen and validate his feelings.
+
+Recommendations for improvement: Practice active listening and validating the patient's emotions to show empathy and support, while also taking a collaborative approach to problem-solving.
+
+Component 7: Respect
+
+Rating: Adequate
+
+Specific examples: Dr. Alex showed respect towards Mr. Johnson by establishing a partnership and being sensitive during the examination, but could have done more to make the patient feel comfortable and involved in the consultation.
+
+Recommendations for improvement: Practice involving the patient in the decision-making process and taking a collaborative approach to problem-solving, while also showing sensitivity and respect towards their needs and concerns.
+
+Component 8: Closure
+
+Rating: Adequate
+
+Specific examples: Dr. Alex provided a clear explanation of his impression and plan, but could have done more to address any remaining questions or concerns from Mr. Johnson.
+
+Recommendations for improvement: Practice actively listening to the patient's questions and concerns, while also providing a clear and concise explanation of the diagnosis and treatment plan, in order to ensure a smooth closure to the consultation.

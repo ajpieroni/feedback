@@ -33,7 +33,7 @@ def listen():
                 
                 try:
                     text = recognizer.recognize_google(audio)
-                    print(f"\nYou said: {text}")
+                    # print(f"\nYou said: {text}")
                     return text
                 except sr.UnknownValueError:
                     print("Sorry, I couldn't understand that. Please try again.")
@@ -50,14 +50,15 @@ def listen():
         return None
 
 # Patient persona prompt
-PATIENT_PROMPT = """You are taking on the role of a 35-year-old patient seeking medical care for a sore throat and related symptoms. Your goal is to interact naturally and realistically, using casual, everyday language like a normal adult would.
+PATIENT_PROMPT = """You are taking on the role of Mr. Johnson, a 35-year-old patient seeking medical care for a sore throat and related symptoms. Your goal is to interact naturally and realistically, using casual, everyday language like a normal adult would.
 
 Guidelines for Your Role:
-• Speak naturally – Use simple, conversational language to describe your symptoms. Avoid complex medical terms, as you aren't a doctor and wouldn't naturally use them.
-• Stick to what you know – You only know how you feel. Even if you've heard of strep throat before, don't diagnose yourself or lead the doctor.
-• Be realistic – Don't immediately list all your symptoms. Wait for the doctor to ask questions before revealing more details.
-• Express how you feel – If something hurts, be clear about it. If you're frustrated, show it. If you're worried about missing work, mention it. Keep it authentic and human.
-• Stay truthful – Your symptoms should match the details provided below. Do not add, exaggerate, or change anything.
+• Be concise - Keep responses brief (1-2 sentences maximum)
+• No actions - Do not describe actions, gestures, or facial expressions
+• Wait for questions - Only answer what's asked, don't volunteer extra information
+• Be natural - Use everyday language, not medical terms
+• Stay in character - You are Mr. Johnson, a food preparation worker with a wife and 8-year-old son
+• Be consistent - Your symptoms and history should match the details provided below
 
 Your current situation:
 You've had a sore throat for about two days. It feels scratchy and burns when you swallow. You can still eat, but solid foods are more painful and you're eating less than usual. You're still drinking about 32 ounces of water daily, but it hurts to swallow. You've been taking Tylenol and ibuprofen every 4-6 hours, which helps a bit but doesn't completely take away the pain. The pain seems to be getting worse. This morning you had a fever of 101.3°F and noticed some white spots on your tonsils when you looked in the mirror.
@@ -79,21 +80,87 @@ Background:
 - No current medications
 
 Remember to:
-1. Respond naturally and conversationally
-2. Only reveal symptoms when asked
-3. Express your concerns about work and family
-4. Use everyday language, not medical terms
-5. Stay consistent with the symptoms described above"""
+1. Keep responses brief and to the point
+2. Never describe actions or gestures
+3. Only answer the specific question asked
+4. Use simple, everyday language
+5. Stay consistent with your symptoms
+6. Don't diagnose yourself or use medical terms
+
+Example of good responses:
+- "I've had a sore throat for about two days now."
+- "It feels scratchy and burns when I swallow."
+- "I've been taking Tylenol and ibuprofen, but they only help a little."
+- "I had a fever of 101.3 this morning."
+
+Example of bad responses:
+- "*clears throat* So, yeah, I've had this sore throat..."
+- "*glances around nervously* And this morning..."
+- "*chuckles awkwardly* I've been taking those Tylenol..."
+- "*shudders* The pain is getting worse..." """
 
 # EPA feedback prompt
-EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide feedback based on EPA (Entrustable Professional Activities) guidelines. Focus on:
-1. Communication skills
-2. History taking
-3. Clinical reasoning
-4. Patient-centered care
-5. Professionalism
+EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide detailed feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
 
-Provide specific examples and suggestions for improvement."""
+IMPORTANT: When referencing specific examples, you MUST include the exact verbatim quote from the transcript in quotation marks, followed by the speaker's name (e.g., "Dr. Alex: [exact quote]" or "Mr. Johnson: [exact quote]").
+
+Components to evaluate:
+
+1. Introduction
+- Did the student introduce themselves properly?
+- Did they identify the patient by name?
+- Was the greeting warm and engaging?
+- Include verbatim quotes showing what was done well or could be improved.
+
+2. Questioning Skills
+- Use of open-ended questions
+- Frequency of interruptions
+- Flow and organization of questioning
+- Include verbatim quotes demonstrating effective or ineffective questioning.
+
+3. Elicit Patient Perspective
+- How well did they understand the patient's explanatory model?
+- Did they explore the impact of illness on the patient's well-being?
+- How well did they incorporate the patient's viewpoint?
+- Include verbatim quotes showing good or missed opportunities.
+
+4. Verbal Communication
+- Use of medical jargon
+- Organization of thoughts
+- Tone of speech
+- Include verbatim quotes showing effective or ineffective communication.
+
+5. Non-verbal Communication
+- Eye contact
+- Physical distance and expressions
+- Overall attentiveness
+- Include verbatim quotes where non-verbal communication is implied or discussed.
+
+6. Empathy
+- Response to emotional cues
+- Quality of empathetic responses
+- Handling of pain or anxiety
+- Include verbatim quotes showing empathetic or missed opportunities.
+
+7. Respect
+- Attitude towards the patient
+- Partnership establishment
+- Sensitivity during examination
+- Include verbatim quotes showing respectful or disrespectful behavior.
+
+8. Closure
+- Explanation of impression and plan
+- Inquiry about remaining questions
+- Closing remarks
+- Include verbatim quotes showing effective or ineffective closure.
+
+For each component:
+1. Rate the performance (Poor, Fair, Adequate, Very Good, Excellent)
+2. Provide specific verbatim quotes from the conversation
+3. Suggest concrete improvements where needed
+4. Highlight particularly effective moments with exact quotes
+
+Format your feedback clearly with specific verbatim quotes and actionable suggestions for improvement."""
 
 def get_patient_response(user_input, conversation_history):
     """Get response from the LLM patient using Ollama."""
@@ -136,50 +203,48 @@ def main():
     conversation_history = []
     full_transcript = []
     
-    print("Starting medical consultation simulation...")
-    print("You can speak to the patient. Speak clearly and naturally.")
-    print("Type 'stop' to end the session and get feedback.")
-    speak("Hello, I'm your patient today. How can I help you?")
+    print("\n🩺 Starting medical consultation simulation...")
+    print("🩺 You are Dr. Alex, a medical student. Speak clearly and naturally.")
+    print("🩺 Type 'stop' to end the session and get feedback.")
+    
+    # Initial greeting
+    # print("\n🩺 Dr. Alex: Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
+    speak("Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
     
     while True:
         # Get user input
         user_input = listen()
         if user_input is None:
-            print("Let's try again...")
+            print("🩺 Let's try again...")
             continue
             
-        # Check for stop commands first
         if any(cmd in user_input.lower() for cmd in ['quit', 'exit', 'end', 'stop']):
-            print("\nEnding consultation...")
+            print("\n🩺 Ending consultation...")
             break
             
-        full_transcript.append(f"Doctor: {user_input}")
+        full_transcript.append(f"🩺 Dr. Alex: {user_input}")
+        print(f"\n🩺 Dr. Alex: {user_input}")
         
         # Get patient response
-        print("\nWaiting for patient to reply...")
-        try:
-            patient_response = get_patient_response(user_input, conversation_history)
-            print(f"\nPatient: {patient_response}")
-            speak(patient_response)
-            
-            full_transcript.append(f"Patient: {patient_response}")
-            
-            # Update conversation history
-            conversation_history.extend([
-                {"role": "user", "content": user_input},
-                {"role": "assistant", "content": patient_response}
-            ])
-        except Exception as e:
-            print(f"\nError getting patient response: {str(e)}")
-            print("Ending consultation due to error...")
-            break
+        print("\n😷 Waiting for patient to reply...")
+        patient_response = get_patient_response(user_input, conversation_history)
+        print(f"\n😷 Mr. Johnson: {patient_response}")
+        speak(patient_response)
+        
+        full_transcript.append(f"😷 Mr. Johnson: {patient_response}")
+        
+        # Update conversation history
+        conversation_history.extend([
+            {"role": "user", "content": user_input},
+            {"role": "assistant", "content": patient_response}
+        ])
     
     # Get EPA feedback
     if full_transcript:
         transcript_text = "\n".join(full_transcript)
         try:
             feedback = get_epa_feedback(transcript_text)
-            print("\n=== EPA Feedback ===")
+            print("\n📝 === EPA Feedback ===")
             print(feedback)
             
             # Save transcript and feedback
@@ -188,12 +253,12 @@ def main():
                 f.write("\n\n=== EPA Feedback ===\n")
                 f.write(feedback)
         except Exception as e:
-            print(f"\nError getting feedback: {str(e)}")
-            print("Saving transcript without feedback...")
+            print(f"\n❌ Error getting feedback: {str(e)}")
+            print("💾 Saving transcript without feedback...")
             with open("consultation_transcript.txt", "w") as f:
                 f.write(transcript_text)
     else:
-        print("No conversation recorded. Ending session without feedback.")
+        print("❌ No conversation recorded. Ending session without feedback.")
 
 if __name__ == "__main__":
     main() 
