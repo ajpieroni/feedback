@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 
 // Debug helper function that logs with timestamps
@@ -25,6 +25,9 @@ export default function Simulator() {
   const [needsUserInteraction, setNeedsUserInteraction] = useState(true); // Track if we need user interaction
   const [initialGreetingPlayed, setInitialGreetingPlayed] = useState(false); // Track if greeting has been played
   const [micVolume, setMicVolume] = useState(0); // Track microphone volume level
+  const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0); // Track when speech was last detected
+  const [autoSendTimer, setAutoSendTimer] = useState<NodeJS.Timeout | null>(null); // Timer for auto-sending
+  const [autoSendCountdown, setAutoSendCountdown] = useState<number | null>(null); // Countdown for auto-send
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -170,6 +173,8 @@ export default function Simulator() {
           // This helps prevent feedback loops
           if (!isSpeaking) {
             setInput(transcript);
+            // Update lastSpeechTimestamp when new speech is detected
+            setLastSpeechTimestamp(Date.now());
           } else {
             debugLog('Ignoring speech input while patient is speaking');
           }
@@ -413,7 +418,25 @@ export default function Simulator() {
     }
   };
 
-  const handleSendMessage = async () => {
+  // Helper function to calculate word overlap ratio between two strings
+  const calculateWordOverlap = (str1: string, str2: string): number => {
+    const words1 = str1.split(/\s+/).filter(w => w.length > 3);
+    const words2 = str2.split(/\s+/).filter(w => w.length > 3);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    let matchCount = 0;
+    for (const word of words1) {
+      if (words2.includes(word)) {
+        matchCount++;
+      }
+    }
+    
+    return matchCount / Math.min(words1.length, words2.length);
+  };
+
+  // Move handleSendMessage to useCallback to prevent dependency issues
+  const handleSendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return;
     
     let userMessage = input.trim();
@@ -553,24 +576,7 @@ export default function Simulator() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Helper function to calculate word overlap ratio between two strings
-  const calculateWordOverlap = (str1: string, str2: string): number => {
-    const words1 = str1.split(/\s+/).filter(w => w.length > 3);
-    const words2 = str2.split(/\s+/).filter(w => w.length > 3);
-    
-    if (words1.length === 0 || words2.length === 0) return 0;
-    
-    let matchCount = 0;
-    for (const word of words1) {
-      if (words2.includes(word)) {
-        matchCount++;
-      }
-    }
-    
-    return matchCount / Math.min(words1.length, words2.length);
-  };
+  }, [input, isLoading, messages, isListening, isSpeaking, recognition, audioRef, setInput, setMessages, setIsListening, setIsSpeaking, setApiErrors, calculateWordOverlap]);
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -696,6 +702,73 @@ export default function Simulator() {
       analyserRef.current = null;
     };
   }, []);
+
+  // Add auto-send functionality based on speech inactivity
+  useEffect(() => {
+    // Only enable auto-send when actively listening and not speaking
+    if (!isListening || isSpeaking || needsUserInteraction || isLoading) {
+      // Clear any existing timers when conditions change
+      if (autoSendTimer) {
+        clearTimeout(autoSendTimer);
+        setAutoSendTimer(null);
+      }
+      setAutoSendCountdown(null);
+      return;
+    }
+
+    // Process silence detection and auto-send
+    const handleSilenceDetection = () => {
+      const now = Date.now();
+      const silenceTime = now - lastSpeechTimestamp;
+      
+      // Only proceed if we have input and there's been silence
+      if (input.trim() && lastSpeechTimestamp > 0 && silenceTime >= 500) {
+        // Calculate countdown (from 2 seconds down to 0)
+        const remainingTime = Math.max(0, 2000 - silenceTime);
+        
+        if (remainingTime <= 0) {
+          // Time to auto-send
+          if (!isSpeaking && isListening) {
+            debugLog('Auto-sending message after 2 seconds of silence');
+            handleSendMessage();
+            setAutoSendCountdown(null);
+            return;
+          }
+        } else {
+          // Update countdown display
+          setAutoSendCountdown(Math.ceil(remainingTime / 1000));
+          
+          // Continue checking
+          const timer = setTimeout(handleSilenceDetection, 100);
+          setAutoSendTimer(timer);
+          return;
+        }
+      }
+      
+      setAutoSendCountdown(null);
+    };
+    
+    // If input changed or speech was detected, restart the process
+    if (input.trim() !== '') {
+      // Start the silence detection process
+      if (autoSendTimer) {
+        clearTimeout(autoSendTimer);
+      }
+      
+      const timer = setTimeout(handleSilenceDetection, 500);
+      setAutoSendTimer(timer);
+    } else {
+      // No input to send
+      setAutoSendCountdown(null);
+    }
+    
+    // Clean up on unmount
+    return () => {
+      if (autoSendTimer) {
+        clearTimeout(autoSendTimer);
+      }
+    };
+  }, [input, lastSpeechTimestamp, isListening, isSpeaking, needsUserInteraction, isLoading, handleSendMessage]);
 
   if (sessionEnded) {
     return (
@@ -932,19 +1005,31 @@ export default function Simulator() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </button>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                needsUserInteraction ? "Click 'Start Simulation' button above first" :
-                isSpeaking ? "Patient is speaking..." : 
-                isListening ? "Speak clearly or type your message here..." : 
-                "Microphone is disabled. Type your message or click the mic button..."
-              }
-              className="flex-grow border rounded-md px-3 py-2"
-              disabled={isLoading || isSpeaking || needsUserInteraction}
-            />
+            <div className="flex-grow relative">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setLastSpeechTimestamp(Date.now()); // Count typing as speech activity
+                }}
+                placeholder={
+                  needsUserInteraction ? "Click 'Start Simulation' button above first" :
+                  isSpeaking ? "Patient is speaking..." : 
+                  isListening ? "Speak clearly or type your message here..." : 
+                  "Microphone is disabled. Type your message or click the mic button..."
+                }
+                className="w-full border rounded-md px-3 py-2"
+                disabled={isLoading || isSpeaking || needsUserInteraction}
+              />
+              
+              {/* Auto-send countdown indicator */}
+              {autoSendCountdown !== null && autoSendCountdown > 0 && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-100 rounded-full w-6 h-6 flex items-center justify-center text-blue-600 text-xs font-bold">
+                  {autoSendCountdown}
+                </div>
+              )}
+            </div>
             <button 
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50"
@@ -958,7 +1043,10 @@ export default function Simulator() {
         <div className="mt-4 text-sm text-gray-600">
           <p>Type "STOP" to end the consultation and receive feedback.</p>
           {isListening && !isSpeaking && (
-            <p className="text-blue-600 mt-1">🎤 Microphone is active - speak clearly to enter your response.</p>
+            <p className="text-blue-600 mt-1">
+              🎤 Microphone is active - speak clearly to enter your response. 
+              <span className="font-medium"> Input will auto-send after 2 seconds of silence.</span>
+            </p>
           )}
           {!isListening && !isSpeaking && (
             <p className="text-orange-600 mt-1">🔇 Microphone is disabled - click the mic button to enable.</p>
