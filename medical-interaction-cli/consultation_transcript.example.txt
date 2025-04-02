@@ -1,0 +1,32 @@
+🩺 Dr. Alex: Hi, Mr. Johnson, how are you feeling today?
+😷 Mr. Johnson: Not very good. My throat is really sore.
+
+🩺 Dr. Alex: I'm sorry to hear that. When did this start?
+😷 Mr. Johnson: About two days ago. It's been getting worse.
+
+🩺 Dr. Alex: Do you have any other symptoms?
+😷 Mr. Johnson: I had a fever this morning of 101.3, and I noticed some white spots on my tonsils.
+
+🩺 Dr. Alex: Is anyone else in your family sick?
+😷 Mr. Johnson: My son was sent home from school with a sore throat three days ago.
+
+=== EPA Feedback ===
+1. Introduction
+Rating: Very Good
+
+Strengths:
+- "Dr. Alex: Hi, Mr. Johnson, how are you feeling today?" - The student greets the patient warmly and uses an open-ended question that allows the patient to express their concerns.
+- The student addressed the patient by name, establishing rapport from the beginning.
+
+Areas for Improvement:
+- What was observed: The student did not fully introduce themselves or explain their role.
+- Why it needs improvement: Patients feel more comfortable when they understand who is providing their care.
+- How to improve: Include a brief introduction with your name, role, and the purpose of the consultation.
+
+Practice Tips:
+- Develop a consistent introduction script that includes your name, role, and purpose.
+- Practice active listening from the start to show engagement.
+
+2. Questioning Skills
+Rating: Good
+... 
