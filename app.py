@@ -5,50 +5,42 @@ from dotenv import load_dotenv
 import json
 import time
 import subprocess
-import threading
-import queue
-import wave
 import pyaudio
+import wave
+import io
 
 # Load environment variables
 load_dotenv()
 
-# Initialize speech recognizer with better settings
-recognizer = sr.Recognizer()
-recognizer.energy_threshold = 4000  # Adjust based on your environment
-recognizer.dynamic_energy_threshold = True
-recognizer.pause_threshold = 0.8  # Shorter pause threshold for more responsive interaction
-
-# Create a queue for keyboard input
-input_queue = queue.Queue()
-
-# Initialize microphone with detailed debugging
-def initialize_microphone():
+# Test microphone availability
+def test_microphone():
     try:
-        print("Attempting to initialize microphone...")
-        # List available microphones
+        print("\nTesting microphone availability...")
+        # List all available microphones
         print("\nAvailable microphones:")
         for index, name in enumerate(sr.Microphone.list_microphone_names()):
             print(f"Microphone {index}: {name}")
         
-        # Try to initialize the default microphone
-        microphone = sr.Microphone()
-        print("\nDefault microphone initialized")
-        
-        # Test microphone
-        print("Testing microphone...")
-        with microphone as source:
-            print("Adjusting for ambient noise...")
-            recognizer.adjust_for_ambient_noise(source, duration=2)
-            print("Microphone test successful!")
-            return microphone
+        # Try to initialize the microphone
+        mic = sr.Microphone()
+        print("\nMicrophone initialized successfully")
+        return True
     except Exception as e:
-        print(f"\nError initializing microphone: {str(e)}")
-        print("Please check your microphone permissions and connection.")
-        return None
+        print(f"\nError testing microphone: {str(e)}")
+        return False
 
-# Initialize microphone
-microphone = initialize_microphone()
+# Initialize speech recognizer with optimized settings
+recognizer = sr.Recognizer()
+recognizer.energy_threshold = 300  # Lower threshold for better sensitivity
+recognizer.dynamic_energy_threshold = True
+recognizer.pause_threshold = 0.8  # Shorter pause threshold
+recognizer.phrase_threshold = 0.3  # Lower phrase threshold
+recognizer.non_speaking_duration = 0.5  # Shorter non-speaking duration
+
+# Test microphone before proceeding
+if not test_microphone():
+    print("Warning: Microphone initialization failed. Please check your microphone connection and permissions.")
+    exit(1)
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -109,62 +101,53 @@ def speak(text):
     """Convert text to speech using macOS's say command."""
     subprocess.run(['say', text])
 
-def keyboard_input_thread():
-    """Thread function to handle keyboard input."""
-    while True:
-        try:
-            print("Type your input (or press Enter to skip):")
-            text = input()
-            print(f"Keyboard thread received: {text}")
-            input_queue.put(text)
-            if text.upper() == "STOP":
-                break
-        except EOFError:
-            print("EOFError in keyboard input thread")
-            break
-        except Exception as e:
-            print(f"Error in keyboard thread: {e}")
-            break
-
 def listen():
-    """Listen for user input (both speech and keyboard)."""
+    """Listen for user input and convert to text."""
     try:
-        # Get direct keyboard input first
-        print("\nEnter your response (or press Enter to use voice input):")
-        text = input().strip()
-        if text:
-            print(f"You typed: {text}")
-            return text
+        with sr.Microphone() as source:
+            print("\nListening... (speak now)")
+            print("Adjusting for ambient noise...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print("Ready! Speak clearly into the microphone...")
             
-        # If no keyboard input, try voice
-        if microphone is None:
-            print("Microphone not available. Please use keyboard input.")
-            return None
+            # Capture audio with visual feedback
+            audio = recognizer.listen(source, timeout=5)
+            print("Audio captured! Processing...")
             
-        print("\nListening for voice input... (speak now)")
-        with microphone as source:
+            # Save audio for debugging
+            audio_data = io.BytesIO()
+            with wave.open(audio_data, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(audio.get_raw_data())
+            
             try:
-                print("Waiting for audio input...")
-                audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
-                print("Audio captured, processing speech...")
-                text = recognizer.recognize_google(audio, language="en-US")
-                print(f"You said: {text}")
-                return text
-            except sr.WaitTimeoutError:
-                print("No voice input detected within 10 seconds. Please try again.")
-                return None
+                # Try multiple recognition attempts with different settings
+                text = recognizer.recognize_google(audio, language="en-US", show_all=True)
+                
+                if isinstance(text, dict) and 'alternative' in text:
+                    # Get the most confident result
+                    best_result = text['alternative'][0]
+                    print(f"\nYou said: {best_result['transcript']}")
+                    if len(text['alternative']) > 1:
+                        print("\nOther possible interpretations:")
+                        for alt in text['alternative'][1:]:
+                            print(f"- {alt['transcript']}")
+                    return best_result['transcript']
+                else:
+                    print("Sorry, I couldn't understand that clearly. Please try again.")
+                    return None
+                    
             except sr.UnknownValueError:
-                print("Voice was not understood. Please try again.")
+                print("Sorry, I couldn't understand that. Please speak more clearly.")
                 return None
             except sr.RequestError as e:
-                print(f"Could not request results from speech recognition service; {e}")
+                print(f"Could not request results; {e}")
                 print("Please check your internet connection.")
                 return None
-            except Exception as e:
-                print(f"Unexpected error during speech recognition: {str(e)}")
-                return None
     except Exception as e:
-        print(f"Error during input: {str(e)}")
+        print(f"Error during listening: {str(e)}")
         return None
 
 def main():
@@ -172,13 +155,8 @@ def main():
     full_transcript = []
     
     print("Starting medical consultation simulation...")
-    print("You can speak or type your responses. Type 'STOP' to end the session and get feedback.")
-    
-    # Test microphone before starting
-    if microphone is None:
-        print("Warning: Microphone is not available. Voice input will not work.")
-        print("Please check your microphone connection and permissions.")
-    
+    print("You can speak to the patient. Speak clearly and naturally.")
+    print("Type 'stop' to end the session and get feedback.")
     speak("Hello, I'm your patient today. How can I help you?")
     
     while True:
@@ -187,7 +165,7 @@ def main():
         if user_input is None:
             continue
             
-        if user_input.upper() == "STOP":
+        if user_input.lower() in ['quit', 'exit', 'end', 'stop']:
             print("\nEnding consultation...")
             break
             
@@ -195,7 +173,7 @@ def main():
         
         # Get patient response
         patient_response = get_patient_response(user_input, conversation_history)
-        print(f"Patient: {patient_response}")
+        print(f"\nPatient: {patient_response}")
         speak(patient_response)
         
         full_transcript.append(f"Patient: {patient_response}")
