@@ -28,12 +28,12 @@ def listen():
             print("Ready! Speak clearly into the microphone...")
             
             try:
-                audio = recognizer.listen(source, timeout=5)
+                # Increased timeout to 10 seconds and added phrase_time_limit
+                audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
                 print("Audio captured! Processing...")
                 
                 try:
                     text = recognizer.recognize_google(audio)
-                    # print(f"\nYou said: {text}")
                     return text
                 except sr.UnknownValueError:
                     print("Sorry, I couldn't understand that. Please try again.")
@@ -42,6 +42,9 @@ def listen():
                     print(f"Could not request results; {e}")
                     print("Please check your internet connection.")
                     return None
+            except sr.WaitTimeoutError:
+                print("No speech detected. Please try again.")
+                return None
             except Exception as e:
                 print(f"Error capturing audio: {str(e)}")
                 return None
@@ -61,6 +64,9 @@ IMPORTANT RULES:
 2. NEVER use quotation marks around your responses
 3. NEVER use special characters or formatting
 4. Keep responses brief and natural
+5. ALWAYS speak from YOUR perspective as the patient
+6. NEVER ask questions back to the doctor
+7. ONLY answer what's asked
 
 Guidelines for Your Role:
 • Be concise - Keep responses brief (1-2 sentences maximum)
@@ -90,6 +96,7 @@ Background:
 - No current medications
 
 Example of good responses:
+- Yeah, that sounds fine.
 - I've had a sore throat for about two days now.
 - It feels scratchy and burns when I swallow.
 - I've been taking Tylenol and ibuprofen, but they only help a little.
@@ -102,7 +109,9 @@ Example of bad responses:
 - *shudders* The pain is getting worse...
 - "Oh, it's really painful!"
 - 😷 The pain is terrible!
-- *winces in pain* It hurts a lot."""
+- *winces in pain* It hurts a lot.
+- Have you tried any other medications?
+- What do you think is wrong with me?"""
 
 # EPA feedback prompt
 EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide detailed, actionable feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
@@ -239,13 +248,8 @@ def main():
     print("🩺 You are Dr. Alex, a medical student. Speak clearly and naturally.")
     print("🩺 Type 'stop' to end the session and get feedback.")
     
-    # Test speech synthesis
-    print("\nTesting speech synthesis...")
-    speak("Hello, this is a test.")
-    
-    # Initial greeting
-    print("\nStarting consultation...")
-    speak("Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
+    # Initial greeting (printed only, not spoken)
+    print("\n🩺 Dr. Alex: Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
     
     while True:
         # Get user input
