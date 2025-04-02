@@ -22,16 +22,33 @@ recognizer.pause_threshold = 0.8  # Shorter pause threshold for more responsive 
 # Create a queue for keyboard input
 input_queue = queue.Queue()
 
+# Initialize microphone with detailed debugging
+def initialize_microphone():
+    try:
+        print("Attempting to initialize microphone...")
+        # List available microphones
+        print("\nAvailable microphones:")
+        for index, name in enumerate(sr.Microphone.list_microphone_names()):
+            print(f"Microphone {index}: {name}")
+        
+        # Try to initialize the default microphone
+        microphone = sr.Microphone()
+        print("\nDefault microphone initialized")
+        
+        # Test microphone
+        print("Testing microphone...")
+        with microphone as source:
+            print("Adjusting for ambient noise...")
+            recognizer.adjust_for_ambient_noise(source, duration=2)
+            print("Microphone test successful!")
+            return microphone
+    except Exception as e:
+        print(f"\nError initializing microphone: {str(e)}")
+        print("Please check your microphone permissions and connection.")
+        return None
+
 # Initialize microphone
-try:
-    microphone = sr.Microphone()
-    with microphone as source:
-        print("Calibrating microphone for ambient noise...")
-        recognizer.adjust_for_ambient_noise(source, duration=2)
-        print("Microphone calibration complete.")
-except Exception as e:
-    print(f"Error initializing microphone: {e}")
-    microphone = None
+microphone = initialize_microphone()
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -127,8 +144,9 @@ def listen():
         print("\nListening for voice input... (speak now)")
         with microphone as source:
             try:
+                print("Waiting for audio input...")
                 audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
-                print("Processing speech...")
+                print("Audio captured, processing speech...")
                 text = recognizer.recognize_google(audio, language="en-US")
                 print(f"You said: {text}")
                 return text
@@ -140,9 +158,13 @@ def listen():
                 return None
             except sr.RequestError as e:
                 print(f"Could not request results from speech recognition service; {e}")
+                print("Please check your internet connection.")
+                return None
+            except Exception as e:
+                print(f"Unexpected error during speech recognition: {str(e)}")
                 return None
     except Exception as e:
-        print(f"Error during input: {e}")
+        print(f"Error during input: {str(e)}")
         return None
 
 def main():
