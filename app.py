@@ -8,50 +8,155 @@ import subprocess
 import pyaudio
 import wave
 import io
+import requests
 
 # Load environment variables
 load_dotenv()
 
-# Initialize speech recognizer with basic settings
-recognizer = sr.Recognizer()
-recognizer.energy_threshold = 300
-recognizer.dynamic_energy_threshold = True
+# ElevenLabs API key
+ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
+if ELEVEN_API_KEY:
+    print("ElevenLabs API key loaded successfully")
+else:
+    print("ElevenLabs API key not found in .env file")
+
+def speak(text):
+    """Convert text to speech using ElevenLabs API only."""
+    try:
+        print(f"\nSpeaking: {text}")
+        
+        if not ELEVEN_API_KEY:
+            print("ERROR: ElevenLabs API key is required but not found in .env file")
+            return
+            
+        # Use ElevenLabs API directly via requests
+        try:
+            # Use Josh voice (male voice)
+            voice_id = "TxGEqnHWrfWFTfGW9XjX"  # Josh voice ID
+            
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+            
+            headers = {
+                "Accept": "audio/mpeg",
+                "Content-Type": "application/json",
+                "xi-api-key": ELEVEN_API_KEY
+            }
+            
+            data = {
+                "text": text,
+                "model_id": "eleven_monolingual_v1",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.5
+                }
+            }
+            
+            print("Sending request to ElevenLabs...")
+            response = requests.post(url, json=data, headers=headers)
+            
+            if response.status_code == 200:
+                print(f"Received audio response: {len(response.content)} bytes")
+                # Save audio to a temporary file and play it
+                audio_file = "temp_speech.mp3"
+                with open(audio_file, "wb") as f:
+                    f.write(response.content)
+                
+                print(f"Saved audio to {audio_file}, playing now with afplay...")
+                
+                # Play using afplay (macOS built-in player)
+                # Use full path to afplay and run in a subprocess
+                try:
+                    volume_command = ["osascript", "-e", "set volume output volume 100"]
+                    subprocess.run(volume_command, check=True)
+                    print("Volume set to maximum")
+                    
+                    afplay_result = subprocess.run(["/usr/bin/afplay", audio_file], 
+                                                 check=True, 
+                                                 stdout=subprocess.PIPE, 
+                                                 stderr=subprocess.PIPE)
+                    print(f"afplay completed with exit code: {afplay_result.returncode}")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error playing audio: {e}")
+                    print(f"Return code: {e.returncode}")
+                    print(f"Output: {e.output}")
+                    print(f"Stderr: {e.stderr}")
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(audio_file):
+                        os.remove(audio_file)
+                
+                print("Speech completed (ElevenLabs)")
+            else:
+                print(f"ElevenLabs API error: {response.status_code}")
+                print(f"Error details: {response.text}")
+        except Exception as e:
+            print(f"Error with ElevenLabs speech: {e}")
+    except Exception as e:
+        print(f"Error with speech: {e}")
+
+def create_recognizer():
+    """Create a new speech recognizer instance with optimized settings."""
+    r = sr.Recognizer()
+    r.energy_threshold = 300  # Increased for better detection
+    r.dynamic_energy_threshold = True
+    r.pause_threshold = 0.8
+    r.phrase_threshold = 0.3
+    r.non_speaking_duration = 0.5
+    return r
 
 def listen():
-    """Listen for user input and convert to text."""
+    """Listen for user input with fallback to keyboard input."""
+    # Ask user if they want to use speech or keyboard
+    choice = input("\nUse speech recognition? (y/n): ")
+    
+    if choice.lower() in ['n', 'no']:
+        # Use keyboard input
+        text = input("Type your question (or 'stop' to end): ")
+        return text
+    
+    # Try speech recognition
     try:
-        # Use a single microphone instance
-        with sr.Microphone(device_index=4) as mic:
-            print("\nListening... (speak now)")
+        # Create a new recognizer for each listen attempt
+        recognizer = create_recognizer()
+        
+        # Use MacBook Pro Microphone (index 4)
+        mic_index = 4  # MacBook Pro Microphone
+        with sr.Microphone(device_index=mic_index) as mic:
+            print(f"\nListening using MacBook Pro Microphone... (speak now)")
             print("Adjusting for ambient noise...")
             recognizer.adjust_for_ambient_noise(mic, duration=1)
             print("Ready! Speak clearly into the microphone...")
             
             try:
-                # Get the audio with increased timeout and phrase time limit
-                audio = recognizer.listen(mic, timeout=10, phrase_time_limit=15)
+                # Get the audio with longer timeouts
+                print("Waiting for speech... (say something)")
+                audio = recognizer.listen(mic, timeout=7, phrase_time_limit=10)
                 print("Audio captured! Processing...")
                 
                 try:
+                    # Use Google's speech recognition
                     text = recognizer.recognize_google(audio)
-                    print(f"\nYou said: {text}")
-                    return text
+                    if text:
+                        print(f"\nYou said: {text}")
+                        return text
+                    else:
+                        print("Received empty text from speech recognition.")
                 except sr.UnknownValueError:
-                    print("Sorry, I couldn't understand that. Please try again.")
-                    return None
+                    print("Sorry, I couldn't understand that.")
                 except sr.RequestError as e:
                     print(f"Could not request results; {e}")
                     print("Please check your internet connection.")
-                    return None
             except sr.WaitTimeoutError:
-                print("No speech detected. Please try again.")
-                return None
+                print("No speech detected.")
             except Exception as e:
                 print(f"\nError capturing audio: {str(e)}")
-                return None
     except Exception as e:
         print(f"Error initializing microphone: {str(e)}")
-        return None
+    
+    # If speech recognition fails, fall back to keyboard input
+    print("Falling back to keyboard input.")
+    text = input("Type your question (or 'stop' to end): ")
+    return text
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are taking on the role of Mr. Johnson, a 35-year-old patient seeking medical care for a sore throat and related symptoms. Your goal is to interact naturally and realistically, using casual, everyday language like a normal adult would.
@@ -62,12 +167,18 @@ IMPORTANT RULES:
    - NO emotes or emojis
    - NO stage directions
    - NO descriptions of actions or gestures
+   - NO coughs, sighs, or other sound effects
+   - NO body language descriptions
+   - NO facial expressions
 2. NEVER use quotation marks around your responses
 3. NEVER use special characters or formatting
 4. Keep responses brief and natural
 5. ALWAYS speak from YOUR perspective as the patient
 6. NEVER ask questions back to the doctor
 7. ONLY answer what's asked
+8. NEVER include actions or gestures in your responses
+9. NEVER use asterisks or any other special characters
+10. NEVER describe what you're doing or how you're feeling physically
 
 Guidelines for Your Role:
 • Be concise - Keep responses brief (1-2 sentences maximum)
@@ -78,7 +189,7 @@ Guidelines for Your Role:
 • Be consistent - Your symptoms and history should match the details provided below
 
 Your current situation:
-You've had a sore throat for about two days. It feels scratchy and burns when you swallow. You can still eat, but solid foods are more painful and you're eating less than usual. You're still drinking about 32 ounces of water daily, but it hurts to swallow. You've been taking Tylenol and ibuprofen every 4-6 hours, which helps a bit but doesn't completely take away the pain. The pain seems to be getting worse. This morning you had a fever of 101.3°F and noticed some white spots on your tonsils when you looked in the mirror.
+You've had a sore throat for about two days. It feels scratchy and burns when you swallowed. You can still eat, but solid foods are more painful and you're eating less than usual. You're still drinking about 32 ounces of water daily, but it hurts to swallow. You've been taking Tylenol and ibuprofen every 4-6 hours, which helps a bit but doesn't completely take away the pain. The pain seems to be getting worse. This morning you had a fever of 101.3°F and noticed some white spots on your tonsils when you looked in the mirror.
 
 Additional symptoms:
 - Mild frontal headache
@@ -99,7 +210,7 @@ Background:
 Example of good responses:
 - Yeah, that sounds fine.
 - I've had a sore throat for about two days now.
-- It feels scratchy and burns when I swallow.
+- It feels scratchy and burns when I swallowed.
 - I've been taking Tylenol and ibuprofen, but they only help a little.
 - I had a fever of 101.3 this morning.
 
@@ -112,7 +223,9 @@ Example of bad responses:
 - 😷 The pain is terrible!
 - *winces in pain* It hurts a lot.
 - Have you tried any other medications?
-- What do you think is wrong with me?"""
+- What do you think is wrong with me?
+
+Remember: Your responses should be simple, direct statements without any roleplay notation, actions, or special characters."""
 
 # EPA feedback prompt
 EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide detailed, actionable feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
@@ -232,15 +345,6 @@ def get_epa_feedback(transcript):
     
     return response['message']['content']
 
-def speak(text):
-    """Convert text to speech using macOS's say command with Daniel voice."""
-    try:
-        print(f"\nSpeaking: {text}")
-        subprocess.run(['say', '-v', 'Daniel', text])
-        print("Speech completed")
-    except Exception as e:
-        print(f"Error with speech: {e}")
-
 def main():
     conversation_history = []
     full_transcript = []
@@ -253,34 +357,48 @@ def main():
     print("\n🩺 Dr. Alex: Hi, Mr. Johnson, my name is Alex, and I'm a medical student working with Dr. Smith, my attending, today. I'll be asking you some questions to understand what's going on, and then we'll come up with a plan together. Does that sound alright?")
     
     while True:
-        # Get user input
-        user_input = listen()
-        if user_input is None:
-            print("🩺 Let's try again...")
-            continue
+        try:
+            # Get user input
+            user_input = listen()
+            if user_input is None:
+                print("🩺 Let's try again...")
+                time.sleep(1)
+                continue
+                
+            if any(cmd in user_input.lower() for cmd in ['quit', 'exit', 'end', 'stop']):
+                print("\n🩺 Ending consultation...")
+                break
+                
+            full_transcript.append(f"🩺 Dr. Alex: {user_input}")
+            print(f"\n🩺 Dr. Alex: {user_input}")
             
-        if any(cmd in user_input.lower() for cmd in ['quit', 'exit', 'end', 'stop']):
+            # Get patient response
+            print("\n😷 Waiting for patient to reply...")
+            patient_response = get_patient_response(user_input, conversation_history)
+            print(f"\n😷 Mr. Johnson: {patient_response}")
+            
+            # Make the patient speak their response
+            speak(patient_response)
+            
+            full_transcript.append(f"😷 Mr. Johnson: {patient_response}")
+            
+            # Update conversation history
+            conversation_history.extend([
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": patient_response}
+            ])
+            
+            # Add a small delay between interactions
+            time.sleep(0.5)
+            
+        except KeyboardInterrupt:
             print("\n🩺 Ending consultation...")
             break
-            
-        full_transcript.append(f"🩺 Dr. Alex: {user_input}")
-        print(f"\n🩺 Dr. Alex: {user_input}")
-        
-        # Get patient response
-        print("\n😷 Waiting for patient to reply...")
-        patient_response = get_patient_response(user_input, conversation_history)
-        print(f"\n😷 Mr. Johnson: {patient_response}")
-        
-        # Make the patient speak their response
-        speak(patient_response)
-        
-        full_transcript.append(f"😷 Mr. Johnson: {patient_response}")
-        
-        # Update conversation history
-        conversation_history.extend([
-            {"role": "user", "content": user_input},
-            {"role": "assistant", "content": patient_response}
-        ])
+        except Exception as e:
+            print(f"\n❌ Error during conversation: {str(e)}")
+            print("🩺 Let's try again...")
+            time.sleep(1)
+            continue
     
     # Get EPA feedback
     if full_transcript:
