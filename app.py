@@ -12,35 +12,42 @@ import io
 # Load environment variables
 load_dotenv()
 
-# Test microphone availability
-def test_microphone():
-    try:
-        print("\nTesting microphone availability...")
-        # List all available microphones
-        print("\nAvailable microphones:")
-        for index, name in enumerate(sr.Microphone.list_microphone_names()):
-            print(f"Microphone {index}: {name}")
-        
-        # Try to initialize the microphone
-        mic = sr.Microphone()
-        print("\nMicrophone initialized successfully")
-        return True
-    except Exception as e:
-        print(f"\nError testing microphone: {str(e)}")
-        return False
-
-# Initialize speech recognizer with optimized settings
+# Initialize speech recognizer with basic settings
 recognizer = sr.Recognizer()
-recognizer.energy_threshold = 300  # Lower threshold for better sensitivity
+recognizer.energy_threshold = 300
 recognizer.dynamic_energy_threshold = True
-recognizer.pause_threshold = 0.8  # Shorter pause threshold
-recognizer.phrase_threshold = 0.3  # Lower phrase threshold
-recognizer.non_speaking_duration = 0.5  # Shorter non-speaking duration
 
-# Test microphone before proceeding
-if not test_microphone():
-    print("Warning: Microphone initialization failed. Please check your microphone connection and permissions.")
-    exit(1)
+def listen():
+    """Listen for user input and convert to text."""
+    try:
+        # Explicitly use MacBook Pro Microphone (index 4)
+        with sr.Microphone(device_index=4) as source:
+            print("\nListening... (speak now)")
+            print("Adjusting for ambient noise...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print("Ready! Speak clearly into the microphone...")
+            
+            try:
+                audio = recognizer.listen(source, timeout=5)
+                print("Audio captured! Processing...")
+                
+                try:
+                    text = recognizer.recognize_google(audio)
+                    print(f"\nYou said: {text}")
+                    return text
+                except sr.UnknownValueError:
+                    print("Sorry, I couldn't understand that. Please try again.")
+                    return None
+                except sr.RequestError as e:
+                    print(f"Could not request results; {e}")
+                    print("Please check your internet connection.")
+                    return None
+            except Exception as e:
+                print(f"Error capturing audio: {str(e)}")
+                return None
+    except Exception as e:
+        print(f"Error initializing microphone: {str(e)}")
+        return None
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -101,55 +108,6 @@ def speak(text):
     """Convert text to speech using macOS's say command."""
     subprocess.run(['say', text])
 
-def listen():
-    """Listen for user input and convert to text."""
-    try:
-        with sr.Microphone() as source:
-            print("\nListening... (speak now)")
-            print("Adjusting for ambient noise...")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-            print("Ready! Speak clearly into the microphone...")
-            
-            # Capture audio with visual feedback
-            audio = recognizer.listen(source, timeout=5)
-            print("Audio captured! Processing...")
-            
-            # Save audio for debugging
-            audio_data = io.BytesIO()
-            with wave.open(audio_data, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(16000)
-                wf.writeframes(audio.get_raw_data())
-            
-            try:
-                # Try multiple recognition attempts with different settings
-                text = recognizer.recognize_google(audio, language="en-US", show_all=True)
-                
-                if isinstance(text, dict) and 'alternative' in text:
-                    # Get the most confident result
-                    best_result = text['alternative'][0]
-                    print(f"\nYou said: {best_result['transcript']}")
-                    if len(text['alternative']) > 1:
-                        print("\nOther possible interpretations:")
-                        for alt in text['alternative'][1:]:
-                            print(f"- {alt['transcript']}")
-                    return best_result['transcript']
-                else:
-                    print("Sorry, I couldn't understand that clearly. Please try again.")
-                    return None
-                    
-            except sr.UnknownValueError:
-                print("Sorry, I couldn't understand that. Please speak more clearly.")
-                return None
-            except sr.RequestError as e:
-                print(f"Could not request results; {e}")
-                print("Please check your internet connection.")
-                return None
-    except Exception as e:
-        print(f"Error during listening: {str(e)}")
-        return None
-
 def main():
     conversation_history = []
     full_transcript = []
@@ -163,6 +121,7 @@ def main():
         # Get user input
         user_input = listen()
         if user_input is None:
+            print("Let's try again...")
             continue
             
         if user_input.lower() in ['quit', 'exit', 'end', 'stop']:
