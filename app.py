@@ -7,15 +7,31 @@ import time
 import subprocess
 import threading
 import queue
+import wave
+import pyaudio
 
 # Load environment variables
 load_dotenv()
 
-# Initialize speech recognizer
+# Initialize speech recognizer with better settings
 recognizer = sr.Recognizer()
+recognizer.energy_threshold = 4000  # Adjust based on your environment
+recognizer.dynamic_energy_threshold = True
+recognizer.pause_threshold = 0.8  # Shorter pause threshold for more responsive interaction
 
 # Create a queue for keyboard input
 input_queue = queue.Queue()
+
+# Initialize microphone
+try:
+    microphone = sr.Microphone()
+    with microphone as source:
+        print("Calibrating microphone for ambient noise...")
+        recognizer.adjust_for_ambient_noise(source, duration=2)
+        print("Microphone calibration complete.")
+except Exception as e:
+    print(f"Error initializing microphone: {e}")
+    microphone = None
 
 # Patient persona prompt
 PATIENT_PROMPT = """You are a patient in a medical consultation. You should:
@@ -80,46 +96,54 @@ def keyboard_input_thread():
     """Thread function to handle keyboard input."""
     while True:
         try:
+            print("Type your input (or press Enter to skip):")
             text = input()
+            print(f"Keyboard thread received: {text}")
             input_queue.put(text)
-            if text == "STOP":
+            if text.upper() == "STOP":
                 break
         except EOFError:
+            print("EOFError in keyboard input thread")
+            break
+        except Exception as e:
+            print(f"Error in keyboard thread: {e}")
             break
 
 def listen():
     """Listen for user input (both speech and keyboard)."""
-    print("Speak or type your input (type 'STOP' to end the session)...")
-    
-    # Start keyboard input thread
-    keyboard_thread = threading.Thread(target=keyboard_input_thread)
-    keyboard_thread.daemon = True
-    keyboard_thread.start()
-    
-    with sr.Microphone() as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source)
-        
-        try:
-            # Wait for either speech or keyboard input
-            audio = recognizer.listen(source, timeout=1)
-            text = recognizer.recognize_google(audio)
-            print(f"You said: {text}")
+    try:
+        # Get direct keyboard input first
+        print("\nEnter your response (or press Enter to use voice input):")
+        text = input().strip()
+        if text:
+            print(f"You typed: {text}")
             return text
-        except sr.WaitTimeoutError:
-            # Check for keyboard input
+            
+        # If no keyboard input, try voice
+        if microphone is None:
+            print("Microphone not available. Please use keyboard input.")
+            return None
+            
+        print("\nListening for voice input... (speak now)")
+        with microphone as source:
             try:
-                text = input_queue.get_nowait()
-                print(f"You typed: {text}")
+                audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+                print("Processing speech...")
+                text = recognizer.recognize_google(audio, language="en-US")
+                print(f"You said: {text}")
                 return text
-            except queue.Empty:
+            except sr.WaitTimeoutError:
+                print("No voice input detected within 10 seconds. Please try again.")
                 return None
-        except sr.UnknownValueError:
-            print("Sorry, I couldn't understand that.")
-            return None
-        except sr.RequestError as e:
-            print(f"Could not request results; {e}")
-            return None
+            except sr.UnknownValueError:
+                print("Voice was not understood. Please try again.")
+                return None
+            except sr.RequestError as e:
+                print(f"Could not request results from speech recognition service; {e}")
+                return None
+    except Exception as e:
+        print(f"Error during input: {e}")
+        return None
 
 def main():
     conversation_history = []
@@ -127,6 +151,12 @@ def main():
     
     print("Starting medical consultation simulation...")
     print("You can speak or type your responses. Type 'STOP' to end the session and get feedback.")
+    
+    # Test microphone before starting
+    if microphone is None:
+        print("Warning: Microphone is not available. Voice input will not work.")
+        print("Please check your microphone connection and permissions.")
+    
     speak("Hello, I'm your patient today. How can I help you?")
     
     while True:
@@ -135,7 +165,7 @@ def main():
         if user_input is None:
             continue
             
-        if user_input == "STOP":
+        if user_input.upper() == "STOP":
             print("\nEnding consultation...")
             break
             
