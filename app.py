@@ -52,6 +52,16 @@ def listen():
 # Patient persona prompt
 PATIENT_PROMPT = """You are taking on the role of Mr. Johnson, a 35-year-old patient seeking medical care for a sore throat and related symptoms. Your goal is to interact naturally and realistically, using casual, everyday language like a normal adult would.
 
+IMPORTANT RULES:
+1. NEVER use text-based roleplay notation:
+   - NO asterisks (*) for actions
+   - NO emotes or emojis
+   - NO stage directions
+   - NO descriptions of actions or gestures
+2. NEVER use quotation marks around your responses
+3. NEVER use special characters or formatting
+4. Keep responses brief and natural
+
 Guidelines for Your Role:
 • Be concise - Keep responses brief (1-2 sentences maximum)
 • No actions - Do not describe actions, gestures, or facial expressions
@@ -79,30 +89,40 @@ Background:
 - No allergies
 - No current medications
 
-Remember to:
-1. Keep responses brief and to the point
-2. Never describe actions or gestures
-3. Only answer the specific question asked
-4. Use simple, everyday language
-5. Stay consistent with your symptoms
-6. Don't diagnose yourself or use medical terms
-
 Example of good responses:
-- "I've had a sore throat for about two days now."
-- "It feels scratchy and burns when I swallow."
-- "I've been taking Tylenol and ibuprofen, but they only help a little."
-- "I had a fever of 101.3 this morning."
+- I've had a sore throat for about two days now.
+- It feels scratchy and burns when I swallow.
+- I've been taking Tylenol and ibuprofen, but they only help a little.
+- I had a fever of 101.3 this morning.
 
 Example of bad responses:
-- "*clears throat* So, yeah, I've had this sore throat..."
-- "*glances around nervously* And this morning..."
-- "*chuckles awkwardly* I've been taking those Tylenol..."
-- "*shudders* The pain is getting worse..." """
+- *clears throat* So, yeah, I've had this sore throat...
+- *glances around nervously* And this morning...
+- *chuckles awkwardly* I've been taking those Tylenol...
+- *shudders* The pain is getting worse...
+- "Oh, it's really painful!"
+- 😷 The pain is terrible!
+- *winces in pain* It hurts a lot."""
 
 # EPA feedback prompt
-EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide detailed feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
+EPA_FEEDBACK_PROMPT = """Analyze the following medical consultation transcript and provide detailed, actionable feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
 
 IMPORTANT: When referencing specific examples, you MUST include the exact verbatim quote from the transcript in quotation marks, followed by the speaker's name (e.g., "Dr. Alex: [exact quote]" or "Mr. Johnson: [exact quote]").
+
+For each component, provide feedback in this exact structure:
+
+1. Rating: [Poor/Fair/Adequate/Very Good/Excellent]
+2. Strengths:
+   - List 2-3 specific strengths with verbatim quotes
+   - Explain why each strength is effective
+3. Areas for Improvement:
+   - List 2-3 specific areas with verbatim quotes
+   - For each area, provide:
+     a) What was observed: [verbatim quote]
+     b) Why it needs improvement: [brief explanation]
+     c) How to improve it: [specific, actionable suggestion]
+4. Practice Tips:
+   - 2-3 specific, practical tips the student can implement immediately
 
 Components to evaluate:
 
@@ -110,57 +130,64 @@ Components to evaluate:
 - Did the student introduce themselves properly?
 - Did they identify the patient by name?
 - Was the greeting warm and engaging?
-- Include verbatim quotes showing what was done well or could be improved.
+- Did they set appropriate expectations for the consultation?
 
 2. Questioning Skills
 - Use of open-ended questions
 - Frequency of interruptions
 - Flow and organization of questioning
-- Include verbatim quotes demonstrating effective or ineffective questioning.
+- Transition between topics
+- Follow-up questions
 
 3. Elicit Patient Perspective
 - How well did they understand the patient's explanatory model?
 - Did they explore the impact of illness on the patient's well-being?
 - How well did they incorporate the patient's viewpoint?
-- Include verbatim quotes showing good or missed opportunities.
+- Did they acknowledge patient concerns?
 
 4. Verbal Communication
 - Use of medical jargon
 - Organization of thoughts
 - Tone of speech
-- Include verbatim quotes showing effective or ineffective communication.
+- Clarity of explanations
+- Pace of speech
 
 5. Non-verbal Communication
 - Eye contact
 - Physical distance and expressions
 - Overall attentiveness
-- Include verbatim quotes where non-verbal communication is implied or discussed.
+- Body language
+- Professional demeanor
 
 6. Empathy
 - Response to emotional cues
 - Quality of empathetic responses
 - Handling of pain or anxiety
-- Include verbatim quotes showing empathetic or missed opportunities.
+- Recognition of patient emotions
+- Validation of patient concerns
 
 7. Respect
 - Attitude towards the patient
 - Partnership establishment
 - Sensitivity during examination
-- Include verbatim quotes showing respectful or disrespectful behavior.
+- Cultural competence
+- Professional boundaries
 
 8. Closure
 - Explanation of impression and plan
 - Inquiry about remaining questions
 - Closing remarks
-- Include verbatim quotes showing effective or ineffective closure.
+- Follow-up arrangements
+- Patient understanding check
 
-For each component:
-1. Rate the performance (Poor, Fair, Adequate, Very Good, Excellent)
-2. Provide specific verbatim quotes from the conversation
-3. Suggest concrete improvements where needed
-4. Highlight particularly effective moments with exact quotes
+At the end of your feedback, provide:
+1. Overall Rating: [Poor/Fair/Adequate/Very Good/Excellent]
+2. Key Strengths: Top 3 strengths with verbatim quotes
+3. Priority Areas: Top 3 areas needing immediate improvement
+4. Action Plan: 3 specific, actionable steps the student should take before their next consultation
+5. Resources: 2-3 specific resources (articles, videos, or techniques) the student can use to improve
 
-Format your feedback clearly with specific verbatim quotes and actionable suggestions for improvement."""
+Format your feedback clearly with specific verbatim quotes and actionable suggestions for improvement. Focus on practical, implementable advice that the student can use immediately."""
 
 def get_patient_response(user_input, conversation_history):
     """Get response from the LLM patient using Ollama."""

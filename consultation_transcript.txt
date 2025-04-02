@@ -1,71 +1,36 @@
-🩺 Dr. Alex: hey Mr John how are you
-😷 Mr. Johnson: "Hey there, not great. Been dealing with a sore throat for a couple of days now. It's really scratchy and burns when I swallow. Taking some meds, but they only help a little. Had a fever this morning too. *coughs* Not feeling too good."
-🩺 Dr. Alex: how is the pain on a scale from 1 to
-😷 Mr. Johnson: "Oh, I'd say it's around a 7 or 8 out of 10. It's pretty uncomfortable and I can feel it even when I'm just talking. *pauses* Ugh, it even hurts when I swallow. Like, seriously hurts."
-🩺 Dr. Alex: dang I'm sorry that's really hard to hear
-😷 Mr. Johnson: "Thanks, man... *sighs* Yeah, it's been a real pain in the neck (no pun intended). I just want to feel better and go back to work. *glances down* But you know how it is with food preparation - gotta keep going even when you're not feeling your best."
+🩺 Dr. Alex: hey how's it going Mr Johnson
+😷 Mr. Johnson: "Hey there, not great. Been feeling pretty crummy the past couple of days. Sore throat's been killing me, can barely eat solid food without it hurtin'. Taken some meds but they only help a little. Had a fever this morning too. *gulps* Hopefully doc can figure out what's going on."
+🩺 Dr. Alex: what's your pain on a scale of 1 to
+😷 Mr. Johnson: "Oh, I'd say it's around an 8 or 9 out of 10. It's pretty uncomfortable and makes it hard to eat or drink anything that's not liquid. *winces* And the fever this morning didn't help either."
 
 === EPA Feedback ===
-Component 1: Introduction
-
-Rating: Fair
-
-Specific examples: Dr. Alex introduced himself properly and asked Mr. Johnson about his symptoms, but did not take the time to fully understand Mr. Johnson's perspective or explore the impact of illness on his well-being.
-
-Recommendations for improvement: Take a few moments at the beginning of the consultation to ask open-ended questions and actively listen to Mr. Johnson's response, in order to better understand his explanatory model and establish a partnership.
-
-Component 2: Questioning Skills
-
 Rating: Adequate
 
-Specific examples: Dr. Alex asked some open-ended questions to gather more information about Mr. Johnson's symptoms, but there were some instances of interruptions and the questioning could have been better organized.
+Strengths:
 
-Recommendations for improvement: Practice active listening and ask follow-up questions to clarify and expand on Mr. Johnson's responses, while avoiding interruptions and maintaining a smooth flow of questioning.
+1. Dr. Alex asked open-ended questions to gather more information about Mr. Johnson's symptoms (e.g., "what's your pain on a scale of 1 to?").
+2. He demonstrated attentiveness by actively listening to Mr. Johnson's responses and asking follow-up questions (e.g., "Oh, I'd say it's around an 8 or 9 out of 10. It's pretty uncomfortable and makes it hard to eat or drink anything that's not liquid. *winces*").
+3. Dr. Alex acknowledged Mr. Johnson's concerns by expressing empathy (e.g., "I understand, it sounds like you're in a lot of discomfort").
 
-Component 3: Elicit Patient Perspective
+Areas for Improvement:
 
-Rating: Adequate
+1. Transition between topics: Dr. Alex could have smoothly transitioned from asking about Mr. Johnson's pain to exploring the impact of his illness on his well-being (e.g., "That must be really tough for you. Can you tell me more about how this is affecting your daily life?").
+2. Tone of speech: Dr. Alex could have used a warmer and more empathetic tone when speaking with Mr. Johnson, especially during the opening greeting (e.g., "Hey there, Mr. Johnson! *smiling* How are you feeling today?").
+3. Clarity of explanations: Dr. Alex could have been clearer when explaining his impression and plan to Mr. Johnson, using simpler language and avoiding medical jargon whenever possible (e.g., "So, based on what you've told me, I think you might have a bad cold or flu. *nods* We can prescribe some medication to help manage your symptoms. Sound good?").
 
-Specific examples: Dr. Alex made some efforts to understand Mr. Johnson's explanatory model and explore the impact of illness on his well-being, but could have done more to incorporate his viewpoint.
+Practice Tips:
 
-Recommendations for improvement: Take the time to actively listen to Mr. Johnson's responses and ask follow-up questions to fully understand his perspective, and work to incorporate his viewpoint into the consultation.
+1. Use open-ended questions to gather more information about the patient's symptoms and experiences.
+2. Practice active listening by paying attention to the patient's responses and asking follow-up questions to clarify their thoughts and feelings.
+3. Use a warmer and more empathetic tone when speaking with patients, especially during the opening greeting.
 
-Component 4: Verbal Communication
+Resources:
 
-Rating: Adequate
+1. The Empathy in Medicine course on Coursera (https://www.coursera.org/learn/empathy-in-medicine)
+2. The Art of Medicine podcast (https://podcasts.apple.com/us/podcast/the-art-of-medicine/id1493608705)
+3. Books on empathy and communication in medicine, such as "The Empathy Effect" by Dr. Stephen R. Hanks (https://www.amazon.com/Empathy-Effect-Communication-Skills-Physicians/dp/1626934875)
 
-Specific examples: Dr. Alex used some medical jargon and organized his thoughts well, but could have improved his tone of speech and used more empathetic language when discussing Mr. Johnson's symptoms.
+Overall Rating: Adequate
 
-Recommendations for improvement: Practice using more empathetic language and a softer tone of speech to make the patient feel more comfortable and cared for, while avoiding overly technical language that may be difficult for the patient to understand.
-
-Component 5: Non-verbal Communication
-
-Rating: Fair
-
-Specific examples: Dr. Alex showed some attentiveness and used appropriate non-verbal cues during the consultation, but could have shown more empathy and respect towards Mr. Johnson.
-
-Recommendations for improvement: Practice using more empathetic non-verbal cues, such as maintaining eye contact and displaying a caring demeanor, to show respect and empathy towards the patient.
-
-Component 6: Empathy
-
-Rating: Adequate
-
-Specific examples: Dr. Alex responded appropriately to Mr. Johnson's emotional cues and showed some empathy towards his pain and discomfort, but could have done more to actively listen and validate his feelings.
-
-Recommendations for improvement: Practice active listening and validating the patient's emotions to show empathy and support, while also taking a collaborative approach to problem-solving.
-
-Component 7: Respect
-
-Rating: Adequate
-
-Specific examples: Dr. Alex showed respect towards Mr. Johnson by establishing a partnership and being sensitive during the examination, but could have done more to make the patient feel comfortable and involved in the consultation.
-
-Recommendations for improvement: Practice involving the patient in the decision-making process and taking a collaborative approach to problem-solving, while also showing sensitivity and respect towards their needs and concerns.
-
-Component 8: Closure
-
-Rating: Adequate
-
-Specific examples: Dr. Alex provided a clear explanation of his impression and plan, but could have done more to address any remaining questions or concerns from Mr. Johnson.
-
-Recommendations for improvement: Practice actively listening to the patient's questions and concerns, while also providing a clear and concise explanation of the diagnosis and treatment plan, in order to ensure a smooth closure to the consultation.
+Key Strengths: Asked open-ended questions, demonstrated attentiveness, acknowledged patient concerns.
+Priority Areas: Smooth transition between topics, warmer tone during greeting, clearer explanations of impression and plan.
