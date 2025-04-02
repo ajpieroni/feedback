@@ -13,7 +13,7 @@ export default function Simulator() {
   debugLog('Simulator component initializing');
   
   const [input, setInput] = useState("");
-  const [isListening, setIsListening] = useState(false);
+  const [isListening, setIsListening] = useState(false); // Start with microphone off
   const [messages, setMessages] = useState<{ role: "user" | "patient"; content: string }[]>([
     { role: "patient", content: "Hello, I'm Mr. Johnson. I've been having a sore throat for the past couple of days." }
   ]);
@@ -22,6 +22,7 @@ export default function Simulator() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [apiErrors, setApiErrors] = useState<string[]>([]);
+  const [needsUserInteraction, setNeedsUserInteraction] = useState(true); // Track if we need user interaction
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -29,6 +30,40 @@ export default function Simulator() {
   // Speech recognition setup
   const SpeechRecognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   const recognition = useRef<any>(null);
+
+  // Auto-start speech recognition after component is mounted
+  useEffect(() => {
+    // Don't do anything until user has interacted with the page
+    if (needsUserInteraction) {
+      debugLog('Waiting for user interaction before starting speech recognition');
+      return;
+    }
+    
+    // Only attempt to start if not already listening and not speaking
+    if (SpeechRecognition && !isListening && !isSpeaking) {
+      debugLog('Auto-starting speech recognition after user interaction');
+      try {
+        if (recognition.current) {
+          recognition.current.start();
+          debugLog('Speech recognition auto-started successfully');
+          setIsListening(true);
+        } else {
+          debugLog('Speech recognition not initialized yet');
+        }
+      } catch (error) {
+        debugLog('Error auto-starting speech recognition:', error);
+        setApiErrors(prev => [...prev, `Failed to auto-start speech recognition: ${(error as Error).message}`]);
+      }
+    } else {
+      if (isListening) {
+        debugLog('Not auto-starting speech recognition because it is already active');
+      } else if (isSpeaking) {
+        debugLog('Not auto-starting speech recognition because patient is speaking');
+      } else if (!SpeechRecognition) {
+        debugLog('Speech recognition not available in this browser');
+      }
+    }
+  }, [SpeechRecognition, isSpeaking, isListening, needsUserInteraction]);
 
   useEffect(() => {
     debugLog('Simulator component mounted');
@@ -41,17 +76,38 @@ export default function Simulator() {
       audioRef.current.addEventListener('play', () => {
         debugLog('Audio started playing');
         setIsSpeaking(true);
+        
+        // Ensure speech recognition is stopped when patient speaks
+        if (recognition.current && isListening) {
+          debugLog('Making sure speech recognition is stopped while audio plays');
+          recognition.current.stop();
+          setIsListening(false);
+        }
       });
       
       audioRef.current.addEventListener('ended', () => {
         debugLog('Audio finished playing');
         setIsSpeaking(false);
+        
+        // Add a short delay before allowing speech recognition again
+        // This helps prevent the last bit of audio from being picked up
+        setTimeout(() => {
+          debugLog('Audio playback fully complete, recognition can be re-enabled');
+        }, 500);
       });
       
       audioRef.current.addEventListener('error', (e) => {
         debugLog('Audio playback error', e);
         setIsSpeaking(false);
         setApiErrors(prev => [...prev, `Audio playback error: ${(e as any).message || 'Unknown error'}`]);
+      });
+      
+      // Add pause event listener
+      audioRef.current.addEventListener('pause', () => {
+        debugLog('Audio playback paused');
+        if (audioRef.current?.currentTime === audioRef.current?.duration) {
+          debugLog('Audio playback completed');
+        }
       });
     }
     
@@ -63,7 +119,7 @@ export default function Simulator() {
       }
       debugLog('Simulator component unmounting');
     };
-  }, []);
+  }, [isListening]); // Add isListening as a dependency
 
   useEffect(() => {
     if (SpeechRecognition) {
@@ -105,25 +161,46 @@ export default function Simulator() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Speak initial greeting when component loads
+  // Speak initial greeting when component loads - but only after user interaction
   useEffect(() => {
-    // Speak the initial greeting after a short delay
+    // Don't auto-play greeting until user has interacted with the page
+    if (needsUserInteraction) {
+      debugLog('Waiting for user interaction before playing initial greeting');
+      return;
+    }
+    
+    // Speak the initial greeting after user interaction
     const initialGreeting = messages[0]?.content;
     if (initialGreeting) {
-      const timer = setTimeout(() => {
-        debugLog('Speaking initial greeting');
-        speakWithElevenLabs(initialGreeting);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      debugLog('Speaking initial greeting after user interaction');
+      speakWithElevenLabs(initialGreeting);
     }
-  }, []); // Only run once on component mount
+  }, [needsUserInteraction, messages]); // Run when needsUserInteraction changes to false
 
   const toggleListening = () => {
+    // Handle the first user interaction
+    if (needsUserInteraction) {
+      debugLog('First user interaction detected, initializing features');
+      setNeedsUserInteraction(false);
+      return; // The useEffects will handle starting speech and playing greeting
+    }
+    
+    // Normal toggle behavior
     debugLog('Toggle listening:', !isListening);
+    
+    // Never toggle while speaking
+    if (isSpeaking) {
+      debugLog('Cannot toggle speech recognition while patient is speaking');
+      return;
+    }
+    
     if (isListening) {
-      recognition.current?.stop();
-      setIsListening(false);
+      try {
+        recognition.current?.stop();
+        setIsListening(false);
+      } catch (error) {
+        debugLog('Error stopping speech recognition:', error);
+      }
     } else {
       try {
         recognition.current?.start();
@@ -140,6 +217,13 @@ export default function Simulator() {
     if (!text || isSpeaking) return;
     
     debugLog('Speaking with ElevenLabs:', text);
+    
+    // Temporarily disable speech recognition while the patient is speaking
+    if (isListening) {
+      debugLog('Pausing speech recognition while patient speaks');
+      recognition.current?.stop();
+      setIsListening(false);
+    }
     
     try {
       const startTime = Date.now();
@@ -241,7 +325,31 @@ export default function Simulator() {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
     
-    const userMessage = input.trim();
+    let userMessage = input.trim();
+    debugLog('Preparing to send message:', userMessage);
+    
+    // Check if the input might be accidentally captured from patient's response
+    const patientPrefix = "Mr. Johnson:";
+    if (userMessage.startsWith(patientPrefix)) {
+      debugLog('Detected patient prefix in input, removing it');
+      userMessage = userMessage.substring(patientPrefix.length).trim();
+    }
+    
+    // Also check for partial matches with recent patient responses
+    const lastPatientResponse = messages.filter(m => m.role === "patient").pop()?.content;
+    if (lastPatientResponse && userMessage.length > 15) {
+      if (lastPatientResponse.includes(userMessage) || 
+          userMessage.includes(lastPatientResponse)) {
+        debugLog('Detected probable feedback loop - input matches patient response');
+        setApiErrors(prev => [...prev, 
+          'Potential feedback detected: Your input appears to match the patient\'s last response. ' +
+          'This often happens when speech recognition picks up audio from speakers. ' +
+          'Try using headphones or typing your responses.'
+        ]);
+        // Don't return - still allow the message to be sent after warning
+      }
+    }
+    
     debugLog('Sending message:', userMessage);
     
     // Stop listening if active
@@ -349,6 +457,25 @@ export default function Simulator() {
     handleSendMessage();
   };
 
+  // Handle the first user interaction (Start button click)
+  const handleFirstInteraction = () => {
+    debugLog('User clicked Start Simulation button');
+    setNeedsUserInteraction(false);
+    
+    // After a short delay, auto-start speech recognition if available
+    setTimeout(() => {
+      if (SpeechRecognition && recognition.current && !isListening && !isSpeaking) {
+        try {
+          debugLog('Starting speech recognition after Start button click');
+          recognition.current.start();
+          setIsListening(true);
+        } catch (error) {
+          debugLog('Error starting speech recognition after button click:', error);
+        }
+      }
+    }, 500);
+  };
+
   if (sessionEnded) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -408,6 +535,46 @@ export default function Simulator() {
           </div>
         )}
         
+        {/* First-time user interaction prompt */}
+        {needsUserInteraction && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-4 flex flex-col items-center">
+            <p className="font-bold mb-2">Click the button below to start the simulation</p>
+            <button 
+              onClick={handleFirstInteraction}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md"
+            >
+              Start Simulation
+            </button>
+            <p className="text-sm mt-2">This interaction is needed to enable audio and speech features in your browser</p>
+          </div>
+        )}
+        
+        {/* Speaking indicator */}
+        {isSpeaking && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 flex items-center">
+            <div className="mr-2 relative">
+              <span className="flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+              </span>
+            </div>
+            <p>Mr. Johnson is speaking... Speech recognition paused</p>
+          </div>
+        )}
+        
+        {/* Microphone active indicator */}
+        {isListening && !isSpeaking && !needsUserInteraction && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4 flex items-center">
+            <div className="mr-2 relative">
+              <span className="flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+              </span>
+            </div>
+            <p>Microphone active - speak clearly to enter your response</p>
+          </div>
+        )}
+        
         <div className="bg-white shadow-md rounded-lg flex-grow overflow-hidden flex flex-col">
           {/* Message display area */}
           <div className="flex-grow overflow-y-auto p-4">
@@ -430,8 +597,9 @@ export default function Simulator() {
             <button 
               type="button"
               onClick={toggleListening}
-              className={`${isListening ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"} text-white rounded-full p-2 flex-shrink-0`}
-              title={isListening ? "Stop listening" : "Start listening"}
+              className={`${isListening ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"} text-white rounded-full p-2 flex-shrink-0 ${(isSpeaking || needsUserInteraction) ? "opacity-50 cursor-not-allowed" : ""}`}
+              title={needsUserInteraction ? "Click the 'Start Simulation' button first" : isListening ? "Stop listening" : "Start listening"}
+              disabled={isSpeaking || needsUserInteraction}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -441,14 +609,19 @@ export default function Simulator() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message or press the mic button to speak..."
+              placeholder={
+                needsUserInteraction ? "Click 'Start Simulation' button above first" :
+                isSpeaking ? "Patient is speaking..." : 
+                isListening ? "Speak clearly or type your message here..." : 
+                "Microphone is disabled. Type your message or click the mic button..."
+              }
               className="flex-grow border rounded-md px-3 py-2"
-              disabled={isLoading}
+              disabled={isLoading || isSpeaking || needsUserInteraction}
             />
             <button 
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50"
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || isSpeaking || needsUserInteraction}
             >
               {isLoading ? "..." : "Send"}
             </button>
@@ -457,6 +630,13 @@ export default function Simulator() {
         
         <div className="mt-4 text-sm text-gray-600">
           <p>Type "STOP" to end the consultation and receive feedback.</p>
+          {isListening && !isSpeaking && (
+            <p className="text-blue-600 mt-1">🎤 Microphone is active - speak clearly to enter your response.</p>
+          )}
+          {!isListening && !isSpeaking && (
+            <p className="text-orange-600 mt-1">🔇 Microphone is disabled - click the mic button to enable.</p>
+          )}
+          {isSpeaking && <p className="text-green-600 mt-1">🔈 Speech recognition is paused while the patient is speaking.</p>}
         </div>
       </main>
     </div>
