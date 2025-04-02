@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
 import { HfInference } from '@huggingface/inference';
 
+// Enhanced debugging
+console.log('=== LOADING FEEDBACK API ROUTE ===');
+console.log('Environment check:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('HuggingFace API Key present:', process.env.HUGGINGFACE_API_KEY ? 'Yes' : 'No');
+console.log('HuggingFace API Key valid format:', process.env.HUGGINGFACE_API_KEY?.startsWith('hf_') ? 'Yes' : 'No');
+
 // Initialize HuggingFace client with proper API key access
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+let hf: HfInference;
+try {
+  hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+  console.log('HuggingFace client initialized successfully for feedback API');
+} catch (error) {
+  console.error('Error initializing HuggingFace client in feedback API:', error);
+  hf = new HfInference(); // Initialize without API key as fallback
+}
 
 // EPA feedback prompt
 const EPA_FEEDBACK_PROMPT = `Analyze the following medical consultation transcript and provide detailed, actionable feedback based on the Interpersonal Skills Checklist. For each component, identify specific examples from the conversation and rate them as Poor, Fair, Adequate, Very Good, or Excellent.
@@ -86,34 +100,53 @@ This was a ${messageCount > 10 ? 'comprehensive' : 'basic'} consultation that co
 };
 
 export async function POST(request: Request) {
+  console.log('=== FEEDBACK API CALLED ===');
+  console.time('feedbackApiTotalTime');
+  
   try {
+    console.log('Parsing request body...');
     const body = await request.json();
     const { messages } = body;
+    
+    console.log(`Request received - message count: ${messages?.length || 0}`);
 
     if (!messages || !Array.isArray(messages)) {
+      console.error('Invalid or missing messages array in request');
       return NextResponse.json(
         { error: 'Valid messages array is required' },
         { status: 400 }
       );
     }
 
-    // Log the API key for debugging (don't do this in production!)
-    console.log('Using Hugging Face API key for feedback:', process.env.HUGGINGFACE_API_KEY ? 'API key is set' : 'API key is NOT set');
-
     // Format conversation for feedback
+    console.log('Formatting conversation transcript...');
     let conversationTranscript = '';
-    messages.forEach((msg: any) => {
-      const role = msg.role === 'user' ? 'Doctor' : 'Mr. Johnson';
-      conversationTranscript += `${role}: ${msg.content}\n`;
-    });
+    try {
+      messages.forEach((msg: any) => {
+        const role = msg.role === 'user' ? 'Doctor' : 'Mr. Johnson';
+        conversationTranscript += `${role}: ${msg.content}\n`;
+      });
+      console.log('Transcript formatted successfully, length:', conversationTranscript.length);
+    } catch (transcriptError) {
+      console.error('Error formatting transcript:', transcriptError);
+      conversationTranscript = 'Error processing conversation transcript.';
+    }
 
     try {
       // Create full prompt with transcript
       const fullPrompt = `${EPA_FEEDBACK_PROMPT}\n\nTranscript:\n${conversationTranscript}\n\nPlease provide your feedback:`;
+      console.log('Feedback prompt created, length:', fullPrompt.length);
+      
+      // Using a larger model for complex feedback
+      const modelName = 'mistralai/Mixtral-8x7B-Instruct-v0.1';
+      console.log('Using feedback model:', modelName);
       
       // Call HuggingFace API
+      console.log('Calling HuggingFace API for feedback...');
+      console.time('huggingFaceFeedbackCall');
+      
       const result = await hf.textGeneration({
-        model: 'mistralai/Mixtral-8x7B-Instruct-v0.1', // Using a larger model for complex feedback
+        model: modelName,
         inputs: fullPrompt,
         parameters: {
           max_new_tokens: 1000,
@@ -124,19 +157,32 @@ export async function POST(request: Request) {
         }
       });
       
+      console.timeEnd('huggingFaceFeedbackCall');
+      console.log('Feedback API response received');
+      
       // Extract response
       const feedback = result.generated_text.trim();
+      console.log('Feedback length:', feedback.length);
+      console.log('Feedback preview:', feedback.substring(0, 100) + '...');
+      
+      console.timeEnd('feedbackApiTotalTime');
       return NextResponse.json({ feedback });
     } catch (apiError) {
       console.error('Error calling Hugging Face API for feedback:', apiError);
+      console.log('API error details:', JSON.stringify(apiError).substring(0, 200) + '...');
       
       // Use fallback feedback if API fails
+      console.log('Using fallback feedback generation');
       const fallbackFeedback = generateFallbackFeedback(messages);
-      console.log('Using fallback feedback');
+      console.log('Fallback feedback generated, length:', fallbackFeedback.length);
+      
+      console.timeEnd('feedbackApiTotalTime');
       return NextResponse.json({ feedback: fallbackFeedback });
     }
   } catch (error) {
-    console.error('Error in feedback API:', error);
+    console.error('Fatal error in feedback API:', error);
+    console.log('Error stack:', (error as Error).stack);
+    console.timeEnd('feedbackApiTotalTime');
     return NextResponse.json(
       { error: 'An error occurred processing your request' },
       { status: 500 }

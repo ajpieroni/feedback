@@ -20,7 +20,7 @@ HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 # Model settings
 USE_HUGGINGFACE = HUGGINGFACE_API_KEY is not None
 MODEL_PROVIDER = "huggingface" if USE_HUGGINGFACE else "ollama"
-HUGGINGFACE_MODEL = "meta-llama/Llama-2-7b-chat-hf"  # You can change this to any model you prefer
+HUGGINGFACE_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"  # Using the same model as the webapp
 OLLAMA_MODEL = "llama2"  # Default Ollama model
 
 # Print configuration
