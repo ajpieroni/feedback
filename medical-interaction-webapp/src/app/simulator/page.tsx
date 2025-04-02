@@ -28,6 +28,7 @@ export default function Simulator() {
   const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0); // Track when speech was last detected
   const [autoSendTimer, setAutoSendTimer] = useState<NodeJS.Timeout | null>(null); // Timer for auto-sending
   const [autoSendCountdown, setAutoSendCountdown] = useState<number | null>(null); // Countdown for auto-send
+  const [textOnlyMode, setTextOnlyMode] = useState(false); // Option to use text-only mode
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -42,8 +43,8 @@ export default function Simulator() {
   // Auto-start speech recognition after component is mounted
   useEffect(() => {
     // Don't do anything until user has interacted with the page
-    if (needsUserInteraction) {
-      debugLog('Waiting for user interaction before starting speech recognition');
+    if (needsUserInteraction || textOnlyMode) {
+      debugLog('Waiting for user interaction before starting speech recognition or using text-only mode');
       return;
     }
     
@@ -71,7 +72,7 @@ export default function Simulator() {
         debugLog('Speech recognition not available in this browser');
       }
     }
-  }, [SpeechRecognition, isSpeaking, isListening, needsUserInteraction]);
+  }, [SpeechRecognition, isSpeaking, isListening, needsUserInteraction, textOnlyMode]);
 
   useEffect(() => {
     debugLog('Simulator component mounted');
@@ -586,21 +587,29 @@ export default function Simulator() {
 
   // Handle the first user interaction (Start button click)
   const handleFirstInteraction = () => {
-    debugLog('User clicked Start Simulation button');
+    debugLog('First user interaction detected, initializing features');
     setNeedsUserInteraction(false);
     
-    // After a short delay, auto-start speech recognition if available
-    setTimeout(() => {
-      if (SpeechRecognition && recognition.current && !isListening && !isSpeaking) {
-        try {
-          debugLog('Starting speech recognition after Start button click');
-          recognition.current.start();
-          setIsListening(true);
-        } catch (error) {
-          debugLog('Error starting speech recognition after button click:', error);
+    // Don't auto-start speech recognition in text-only mode
+    if (textOnlyMode) {
+      debugLog('Text-only mode enabled, skipping speech recognition setup');
+      setApiErrors(prev => [...prev, 'Text-only mode enabled. Microphone will remain disabled.']);
+    } else {
+      // After a short delay, auto-start speech recognition if available
+      setTimeout(() => {
+        if (SpeechRecognition && recognition.current && !isListening && !isSpeaking) {
+          try {
+            debugLog('Starting speech recognition after Start button click');
+            recognition.current.start();
+            setIsListening(true);
+          } catch (error) {
+            debugLog('Error starting speech recognition after button click:', error);
+            setApiErrors(prev => [...prev, `Error starting speech recognition: ${(error as Error).message}`]);
+          }
         }
-      }
-    }, 500);
+      }, 500);
+    }
+    // useEffects will handle playing greeting
   };
 
   // Setup microphone visualization when recognition is active
@@ -818,14 +827,105 @@ export default function Simulator() {
       </header>
       
       <main className="flex-grow p-4 md:p-6 max-w-4xl mx-auto w-full flex flex-col">
+        {/* Debug info section - expanded with more details */}
         {apiErrors.length > 0 && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            <h3 className="font-bold">Debug Info:</h3>
-            <ul className="list-disc pl-5 text-sm">
-              {apiErrors.map((error, i) => (
-                <li key={i}>{error}</li>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold">Debug Info:</h3>
+              <button 
+                onClick={() => setApiErrors([])}
+                className="text-xs bg-red-200 hover:bg-red-300 rounded px-2 py-1"
+              >
+                Clear Errors
+              </button>
+            </div>
+            <ul className="list-disc pl-5">
+              {apiErrors.map((error, index) => (
+                <li key={index}>{error}</li>
               ))}
             </ul>
+            
+            {/* Advanced debugging info */}
+            <div className="mt-4 border-t border-red-200 pt-2">
+              <p className="font-medium mb-1 text-sm">System Diagnostics:</p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <dt>Speech Recognition:</dt>
+                <dd>{typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Available' : 'Not Available'}</dd>
+                
+                <dt>Recognition State:</dt>
+                <dd>{isListening ? 'Listening' : 'Not Listening'}</dd>
+                
+                <dt>Audio Context:</dt>
+                <dd>{audioContextRef.current ? `${audioContextRef.current.state}` : 'Not initialized'}</dd>
+                
+                <dt>Browser:</dt>
+                <dd>{typeof navigator !== 'undefined' ? navigator.userAgent.split(' ').slice(-1)[0] : 'Unknown'}</dd>
+                
+                <dt>Microphone Stream:</dt>
+                <dd>{micStreamRef.current ? 'Active' : 'None'}</dd>
+                
+                <dt>Sample Rate:</dt>
+                <dd>{audioContextRef.current ? `${audioContextRef.current.sampleRate}Hz` : 'Unknown'}</dd>
+                
+                <dt>Speaking:</dt>
+                <dd>{isSpeaking ? 'Yes' : 'No'}</dd>
+                
+                <dt>User Interaction:</dt>
+                <dd>{needsUserInteraction ? 'Needed' : 'Complete'}</dd>
+              </dl>
+              <button 
+                onClick={async () => {
+                  debugLog('Manual device test requested');
+                  try {
+                    // List available devices
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioDevices = devices.filter(d => d.kind === 'audioinput');
+                    
+                    let deviceInfo = 'Available audio input devices:\n';
+                    audioDevices.forEach((device, i) => {
+                      deviceInfo += `${i+1}. ${device.label || 'Unnamed device'} (${device.deviceId.substring(0, 8)}...)\n`;
+                    });
+                    
+                    debugLog(deviceInfo);
+                    setApiErrors(prev => [...prev, deviceInfo]);
+                    
+                    // Test the default microphone
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                      audio: { 
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                      } 
+                    });
+                    
+                    debugLog('Obtained media stream for testing');
+                    
+                    // Get audio tracks info
+                    const audioTracks = stream.getAudioTracks();
+                    let trackInfo = 'Audio tracks info:\n';
+                    audioTracks.forEach((track, i) => {
+                      trackInfo += `Track ${i+1}: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}\n`;
+                      trackInfo += `Settings: ${JSON.stringify(track.getSettings())}\n`;
+                    });
+                    
+                    debugLog(trackInfo);
+                    setApiErrors(prev => [...prev, trackInfo]);
+                    
+                    // Clean up
+                    setTimeout(() => {
+                      stream.getTracks().forEach(track => track.stop());
+                    }, 2000);
+                    
+                  } catch (error) {
+                    debugLog('Error during device test:', error);
+                    setApiErrors(prev => [...prev, `Device test error: ${(error as Error).message}`]);
+                  }
+                }}
+                className="mt-2 text-xs bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded"
+              >
+                Test Audio Devices
+              </button>
+            </div>
           </div>
         )}
         
@@ -833,94 +933,120 @@ export default function Simulator() {
         {needsUserInteraction && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-4 flex flex-col items-center">
             <p className="font-bold mb-2">Click the button below to start the simulation</p>
-            <button 
-              onClick={handleFirstInteraction}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md"
-            >
-              Start Simulation
-            </button>
-            <p className="text-sm mt-2">This interaction is needed to enable audio and speech features in your browser</p>
+            <div className="flex flex-col mb-4 items-center">
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  id="textOnlyMode"
+                  checked={textOnlyMode}
+                  onChange={(e) => setTextOnlyMode(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="textOnlyMode" className="text-sm">
+                  Enable Text-Only Mode (use if microphone isn't working)
+                </label>
+              </div>
+              <button 
+                onClick={handleFirstInteraction}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md"
+              >
+                Start Simulation
+              </button>
+            </div>
+            <p className="text-sm">This interaction is needed to enable audio features in your browser</p>
             <p className="text-sm mt-2 font-bold">⚠️ For best results, please use headphones to prevent feedback</p>
             
-            {/* Microphone test feature */}
-            <div className="mt-4 border-t border-yellow-300 pt-3 w-full">
-              <p className="text-sm font-medium mb-2">Not working? Test your microphone:</p>
-              <button
-                onClick={async () => {
-                  try {
-                    debugLog('Testing microphone access');
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    
-                    // Setup temporary audio context to test microphone
-                    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-                    const analyser = audioContext.createAnalyser();
-                    const source = audioContext.createMediaStreamSource(stream);
-                    source.connect(analyser);
-                    analyser.fftSize = 256;
-                    
-                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                    let testVolume = 0;
-                    
-                    // Start checking for audio input
-                    const testMicInterval = setInterval(() => {
-                      analyser.getByteFrequencyData(dataArray);
-                      const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-                      testVolume = Math.min(100, Math.round((average / 256) * 100));
-                      setMicVolume(testVolume); // Use the same state for visualization
+            {/* Microphone test feature - only show if not in text-only mode */}
+            {!textOnlyMode && (
+              <div className="mt-4 border-t border-yellow-300 pt-3 w-full">
+                <p className="text-sm font-medium mb-2">Not working? Test your microphone:</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      debugLog('Testing microphone access');
+                      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                       
-                      if (testVolume > 10) {
+                      // Setup temporary audio context to test microphone
+                      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                      const analyser = audioContext.createAnalyser();
+                      const source = audioContext.createMediaStreamSource(stream);
+                      source.connect(analyser);
+                      analyser.fftSize = 256;
+                      
+                      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                      let testVolume = 0;
+                      
+                      // Start checking for audio input
+                      const testMicInterval = setInterval(() => {
+                        analyser.getByteFrequencyData(dataArray);
+                        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                        testVolume = Math.min(100, Math.round((average / 256) * 100));
+                        setMicVolume(testVolume); // Use the same state for visualization
+                        
+                        if (testVolume > 10) {
+                          clearInterval(testMicInterval);
+                          debugLog('Microphone test successful, volume detected:', testVolume);
+                          setApiErrors(prev => [...prev, `Microphone test successful! Volume level: ${testVolume}%`]);
+                          
+                          // Clean up test resources
+                          setTimeout(() => {
+                            stream.getTracks().forEach(track => track.stop());
+                            audioContext.close();
+                          }, 1000);
+                        }
+                      }, 100);
+                      
+                      // Stop checking after 5 seconds if no sound detected
+                      setTimeout(() => {
                         clearInterval(testMicInterval);
-                        debugLog('Microphone test successful, volume detected:', testVolume);
-                        setApiErrors(prev => [...prev, `Microphone test successful! Volume level: ${testVolume}%`]);
+                        if (testVolume <= 10) {
+                          debugLog('Microphone test failed, no volume detected');
+                          setApiErrors(prev => [...prev, 'Microphone test failed. No audio detected. Please check your microphone settings.']);
+                        }
                         
                         // Clean up test resources
-                        setTimeout(() => {
-                          stream.getTracks().forEach(track => track.stop());
-                          audioContext.close();
-                        }, 1000);
-                      }
-                    }, 100);
-                    
-                    // Stop checking after 5 seconds if no sound detected
-                    setTimeout(() => {
-                      clearInterval(testMicInterval);
-                      if (testVolume <= 10) {
-                        debugLog('Microphone test failed, no volume detected');
-                        setApiErrors(prev => [...prev, 'Microphone test failed. No audio detected. Please check your microphone settings.']);
-                      }
+                        stream.getTracks().forEach(track => track.stop());
+                        audioContext.close();
+                      }, 5000);
                       
-                      // Clean up test resources
-                      stream.getTracks().forEach(track => track.stop());
-                      audioContext.close();
-                    }, 5000);
-                    
-                  } catch (error) {
-                    debugLog('Error testing microphone:', error);
-                    setApiErrors(prev => [...prev, `Microphone test error: ${(error as Error).message}`]);
-                  }
-                }}
-                className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
-              >
-                Test Microphone
-              </button>
-              
-              {/* Show temporary mic level during test */}
-              {micVolume > 0 && needsUserInteraction && (
-                <div className="mt-2">
-                  <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full ${micVolume > 30 ? (micVolume > 70 ? 'bg-green-500' : 'bg-green-400') : 'bg-blue-500'}`}
-                      style={{ width: `${micVolume}%`, transition: 'width 0.1s ease' }}
-                    ></div>
+                    } catch (error) {
+                      debugLog('Error testing microphone:', error);
+                      setApiErrors(prev => [...prev, `Microphone test error: ${(error as Error).message}`]);
+                    }
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+                >
+                  Test Microphone
+                </button>
+                
+                {/* Show temporary mic level during test */}
+                {micVolume > 0 && needsUserInteraction && (
+                  <div className="mt-2">
+                    <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${micVolume > 30 ? (micVolume > 70 ? 'bg-green-500' : 'bg-green-400') : 'bg-blue-500'}`}
+                        style={{ width: `${micVolume}%`, transition: 'width 0.1s ease' }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span>Low</span>
+                      <span>Level: {micVolume}%</span>
+                      <span>High</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span>Low</span>
-                    <span>Level: {micVolume}%</span>
-                    <span>High</span>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Text-only mode indicator */}
+        {!needsUserInteraction && textOnlyMode && (
+          <div className="bg-purple-50 border border-purple-200 text-purple-700 px-4 py-2 rounded mb-4 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm">Text-Only Mode Enabled - Using keyboard input only</p>
           </div>
         )}
         
@@ -994,17 +1120,19 @@ export default function Simulator() {
           
           {/* Input area */}
           <form onSubmit={handleSubmit} className="border-t p-4 flex gap-2">
-            <button 
-              type="button"
-              onClick={toggleListening}
-              className={`${isListening ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"} text-white rounded-full p-2 flex-shrink-0 ${(isSpeaking || needsUserInteraction) ? "opacity-50 cursor-not-allowed" : ""}`}
-              title={needsUserInteraction ? "Click the 'Start Simulation' button first" : isListening ? "Stop listening" : "Start listening"}
-              disabled={isSpeaking || needsUserInteraction}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
-            </button>
+            {!textOnlyMode && (
+              <button 
+                type="button"
+                onClick={toggleListening}
+                className={`${isListening ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"} text-white rounded-full p-2 flex-shrink-0 ${(isSpeaking || needsUserInteraction) ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={needsUserInteraction ? "Click the 'Start Simulation' button first" : isListening ? "Stop listening" : "Start listening"}
+                disabled={isSpeaking || needsUserInteraction}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+            )}
             <div className="flex-grow relative">
               <input
                 type="text"
@@ -1015,6 +1143,7 @@ export default function Simulator() {
                 }}
                 placeholder={
                   needsUserInteraction ? "Click 'Start Simulation' button above first" :
+                  textOnlyMode ? "Type your response and press Enter..." :
                   isSpeaking ? "Patient is speaking..." : 
                   isListening ? "Speak clearly or type your message here..." : 
                   "Microphone is disabled. Type your message or click the mic button..."
@@ -1023,8 +1152,8 @@ export default function Simulator() {
                 disabled={isLoading || isSpeaking || needsUserInteraction}
               />
               
-              {/* Auto-send countdown indicator */}
-              {autoSendCountdown !== null && autoSendCountdown > 0 && (
+              {/* Auto-send countdown indicator - don't show in text-only mode */}
+              {!textOnlyMode && autoSendCountdown !== null && autoSendCountdown > 0 && (
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-100 rounded-full w-6 h-6 flex items-center justify-center text-blue-600 text-xs font-bold">
                   {autoSendCountdown}
                 </div>
@@ -1042,13 +1171,16 @@ export default function Simulator() {
         
         <div className="mt-4 text-sm text-gray-600">
           <p>Type "STOP" to end the consultation and receive feedback.</p>
-          {isListening && !isSpeaking && (
+          {textOnlyMode && (
+            <p className="text-purple-600 mt-1">📝 Text-Only Mode - type your responses and press Enter or Send.</p>
+          )}
+          {!textOnlyMode && isListening && !isSpeaking && (
             <p className="text-blue-600 mt-1">
               🎤 Microphone is active - speak clearly to enter your response. 
               <span className="font-medium"> Input will auto-send after 2 seconds of silence.</span>
             </p>
           )}
-          {!isListening && !isSpeaking && (
+          {!textOnlyMode && !isListening && !isSpeaking && (
             <p className="text-orange-600 mt-1">🔇 Microphone is disabled - click the mic button to enable.</p>
           )}
           {isSpeaking && <p className="text-green-600 mt-1">🔈 Speech recognition is paused while the patient is speaking.</p>}
