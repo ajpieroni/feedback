@@ -33,6 +33,7 @@ export default function Simulator() {
   const [showStopConfirmation, setShowStopConfirmation] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [feedbackDebug, setFeedbackDebug] = useState(""); // Add debug state
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -685,6 +686,7 @@ export default function Simulator() {
 
   // Function to reset the simulation
   const resetSimulation = () => {
+    console.log('Resetting simulation');
     // Reset all state variables
     setInput("");
     setIsListening(false);
@@ -704,6 +706,7 @@ export default function Simulator() {
     setShowStopConfirmation(false);
     setIsTransitioning(false);
     setIsLoadingFeedback(false);
+    setFeedbackDebug(""); // Reset debug state
     
     // Reset refs
     isRecognitionActive.current = false;
@@ -754,6 +757,7 @@ export default function Simulator() {
   };
 
   if (sessionEnded) {
+    console.log('Rendering session ended view, feedback:', feedback ? 'present' : 'missing', 'messages length:', messages.length);
     return (
       <div className={`min-h-screen flex flex-col transition-opacity duration-500 ${isTransitioning ? 'opacity-100' : 'opacity-0'}`}>
         <header className="bg-blue-700 text-white p-6">
@@ -764,6 +768,22 @@ export default function Simulator() {
         <main className="flex-grow p-6 max-w-4xl mx-auto w-full">
           <div className="bg-white shadow-md rounded-lg p-6 mb-6 transform transition-all duration-500 ease-out">
             <h2 className="text-2xl font-semibold mb-4">Feedback on Your Interaction</h2>
+            
+            {/* Short session warning */}
+            {messages.length <= 2 && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <h3 className="text-lg font-semibold text-yellow-700">Short Session Detected</h3>
+                    <p className="text-yellow-600">Your consultation was very brief. For a more comprehensive evaluation, please engage in a longer conversation with the patient.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="prose prose-blue max-w-none bg-gray-50 p-4 rounded">
               {feedback ? (
                 <ReactMarkdown 
@@ -798,6 +818,14 @@ export default function Simulator() {
                 </div>
               )}
             </div>
+            
+            {/* Debug information */}
+            {feedbackDebug && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-700">
+                <p className="font-semibold">Debug Info:</p>
+                <p>{feedbackDebug}</p>
+              </div>
+            )}
           </div>
           
           <div className="bg-white shadow-md rounded-lg p-6 transform transition-all duration-500 ease-out delay-200">
@@ -834,6 +862,7 @@ export default function Simulator() {
     <div className="min-h-screen flex flex-col">
       {/* Loading Screen */}
       {isLoadingFeedback && (
+        console.log('Rendering loading feedback screen, messages length:', messages.length),
         <div className="fixed inset-0 bg-blue-900 bg-opacity-90 flex flex-col items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
             <div className="flex justify-center mb-6">
@@ -847,6 +876,22 @@ export default function Simulator() {
               <div className="bg-blue-600 h-2.5 rounded-full w-3/4 animate-pulse"></div>
             </div>
             <p className="text-sm text-gray-500">Please wait while we process your session</p>
+            
+            {/* Debug information */}
+            {feedbackDebug && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-700">
+                <p className="font-semibold">Debug Info:</p>
+                <p>{feedbackDebug}</p>
+              </div>
+            )}
+            
+            {/* Add a more visible message for short sessions */}
+            {messages.length <= 2 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
+                <p className="font-semibold">Short Session Detected</p>
+                <p>Your session appears to be very short. You'll receive guidance on how to conduct a more comprehensive consultation.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -868,6 +913,7 @@ export default function Simulator() {
               </button>
               <button
                 onClick={async () => {
+                  console.log('End consultation button clicked, messages length:', messages.length);
                   setShowStopConfirmation(false);
                   setIsLoadingFeedback(true);
                   try {
@@ -879,6 +925,11 @@ export default function Simulator() {
                     
                     if (!meaningfulConversation) {
                       debugLog('Not enough conversation for meaningful feedback');
+                      setFeedbackDebug(`Session ended with only ${messages.length} messages. Need at least 3 for meaningful feedback.`);
+                      
+                      // Add a small delay to ensure the loading screen is visible
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      
                       setFeedback(
                         "## Session Ended Early\n\n" +
                         "You ended the consultation before having a meaningful conversation with Mr. Johnson.\n\n" +
@@ -907,6 +958,7 @@ export default function Simulator() {
                     
                     const responseTime = Date.now() - startTime;
                     debugLog(`Feedback API response received in ${responseTime}ms, status: ${response.status}`);
+                    setFeedbackDebug(`API response time: ${responseTime}ms, status: ${response.status}`);
                     
                     if (!response.ok) {
                       const errorText = await response.text();
@@ -923,6 +975,7 @@ export default function Simulator() {
                     }, 100);
                   } catch (error) {
                     debugLog('Error getting feedback:', error);
+                    setFeedbackDebug(`Error: ${(error as Error).message}`);
                     setApiErrors(prev => [...prev, `Feedback error: ${(error as Error).message}`]);
                     setIsLoadingFeedback(false);
                   }
