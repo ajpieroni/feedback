@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import { GeistSans } from 'geist/font';
-import { GeistMono } from 'geist/font';
+import { Inter } from 'next/font/google';
 import "./globals.css";
 
-const geistSans = GeistSans;
-const geistMono = GeistMono;
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: "Medical Consultation Simulator",
@@ -19,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.className} antialiased`}
         suppressHydrationWarning
       >
         {children}
