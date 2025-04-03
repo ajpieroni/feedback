@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import ReactMarkdown from 'react-markdown';
 
 // Debug helper function that logs with timestamps
 const debugLog = (message: string, ...args: any[]) => {
@@ -718,8 +719,26 @@ export default function Simulator() {
         <main className="flex-grow p-6 max-w-4xl mx-auto w-full">
           <div className="bg-white shadow-md rounded-lg p-6 mb-6">
             <h2 className="text-2xl font-semibold mb-4">Feedback on Your Interaction</h2>
-            <div className="whitespace-pre-line bg-gray-50 p-4 rounded">
-              {feedback ? feedback : "Feedback is being generated..."}
+            <div className="prose prose-blue max-w-none bg-gray-50 p-4 rounded">
+              {feedback ? (
+                <ReactMarkdown 
+                  components={{
+                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-4 mb-2" {...props} />,
+                    h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-4 mb-2" {...props} />,
+                    h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-3 mb-2" {...props} />,
+                    p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-2" {...props} />,
+                    li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                    strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                    em: ({node, ...props}) => <em className="italic" {...props} />
+                  }}
+                >
+                  {feedback}
+                </ReactMarkdown>
+              ) : (
+                "Feedback is being generated..."
+              )}
             </div>
           </div>
           

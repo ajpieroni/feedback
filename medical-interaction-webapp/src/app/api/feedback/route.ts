@@ -33,7 +33,16 @@ For each component, provide:
 2. 2-3 specific strengths with examples
 3. 2-3 specific areas for improvement with examples
 
-Keep your feedback constructive, specific, and actionable. Use quotes from the conversation to illustrate your points.`;
+Keep your feedback constructive, specific, and actionable. Use quotes from the conversation to illustrate your points.
+
+IMPORTANT: Format your entire response in Markdown syntax. Use:
+- ## for main headings
+- ### for subheadings
+- **bold** for emphasis
+- Bullet points with hyphens (-) for lists
+- Proper spacing between sections
+
+Your response should be well-structured with clear markdown formatting.`;
 
 // Fallback feedback if the API fails
 const generateFallbackFeedback = (messages: any[]) => {
@@ -41,9 +50,9 @@ const generateFallbackFeedback = (messages: any[]) => {
   const doctorMessages = messages.filter(msg => msg.role === 'user').length;
   
   return `
-## Feedback on Medical Consultation
+# Feedback on Medical Consultation
 
-### 1. Building Rapport
+## 1. Building Rapport
 **Rating**: Very Good
 
 **Strengths**:
@@ -54,7 +63,7 @@ const generateFallbackFeedback = (messages: any[]) => {
 - Consider using more empathetic statements
 - Allow more time for patient to express concerns
 
-### 2. Information Gathering
+## 2. Information Gathering
 **Rating**: ${doctorMessages > 5 ? 'Excellent' : 'Adequate'}
 
 **Strengths**:
@@ -65,7 +74,7 @@ const generateFallbackFeedback = (messages: any[]) => {
 - Consider using more open-ended questions
 - Explore psychosocial aspects of the illness
 
-### 3. Explanation and Planning
+## 3. Explanation and Planning
 **Rating**: ${messageCount > 8 ? 'Very Good' : 'Fair'}
 
 **Strengths**:
@@ -76,7 +85,7 @@ const generateFallbackFeedback = (messages: any[]) => {
 - Verify patient understanding more frequently
 - Provide more details about treatment options
 
-### 4. Active Listening
+## 4. Active Listening
 **Rating**: Good
 
 **Strengths**:
@@ -87,7 +96,7 @@ const generateFallbackFeedback = (messages: any[]) => {
 - Use more reflective statements
 - Summarize what you heard from the patient
 
-### 5. Professional Demeanor
+## 5. Professional Demeanor
 **Rating**: Excellent
 
 **Strengths**:
@@ -97,6 +106,71 @@ const generateFallbackFeedback = (messages: any[]) => {
 **Overall Assessment**:
 This was a ${messageCount > 10 ? 'comprehensive' : 'basic'} consultation that covered the essential elements. Continue to develop your information gathering and explanation skills for future interactions.
 `;
+};
+
+// Post-process feedback to ensure proper markdown formatting
+const ensureMarkdownFormatting = (feedback: string): string => {
+  // If feedback already starts with a heading, return as is
+  if (feedback.trim().startsWith('#') || feedback.trim().startsWith('##')) {
+    return feedback;
+  }
+  
+  // Otherwise, add proper markdown formatting
+  let formattedFeedback = feedback;
+  
+  // Add main heading if missing
+  if (!formattedFeedback.includes('# Feedback')) {
+    formattedFeedback = `# Feedback on Medical Consultation\n\n${formattedFeedback}`;
+  }
+  
+  // Ensure component headings are properly formatted
+  const components = [
+    'Building Rapport',
+    'Information Gathering',
+    'Explanation and Planning',
+    'Active Listening',
+    'Professional Demeanor'
+  ];
+  
+  components.forEach(component => {
+    // Replace various heading formats with proper markdown
+    const patterns = [
+      new RegExp(`${component}\\s*\\n`, 'i'),
+      new RegExp(`#+\\s*${component}\\s*\\n`, 'i'),
+      new RegExp(`\\d+\\.\\s*${component}\\s*\\n`, 'i')
+    ];
+    
+    let replaced = false;
+    for (const pattern of patterns) {
+      if (pattern.test(formattedFeedback)) {
+        formattedFeedback = formattedFeedback.replace(pattern, `## ${component}\n`);
+        replaced = true;
+        break;
+      }
+    }
+    
+    // If no pattern matched, add the heading before the component name
+    if (!replaced && formattedFeedback.includes(component)) {
+      formattedFeedback = formattedFeedback.replace(
+        new RegExp(`(${component})`, 'i'),
+        `## $1`
+      );
+    }
+  });
+  
+  // Ensure "Rating", "Strengths", and "Areas for Improvement" are bold
+  formattedFeedback = formattedFeedback.replace(
+    /(Rating|Strengths|Areas for Improvement):/g,
+    '**$1**:'
+  );
+  
+  // Ensure bullet points are properly formatted
+  formattedFeedback = formattedFeedback.replace(
+    /^(\s*)[•*]\s/gm,
+    '$1- '
+  );
+  
+  return formattedFeedback;
 };
 
 export async function POST(request: Request) {
@@ -134,7 +208,7 @@ export async function POST(request: Request) {
 
     try {
       // Create full prompt with transcript
-      const fullPrompt = `${EPA_FEEDBACK_PROMPT}\n\nTranscript:\n${conversationTranscript}\n\nPlease provide your feedback:`;
+      const fullPrompt = `${EPA_FEEDBACK_PROMPT}\n\nTranscript:\n${conversationTranscript}\n\nPlease provide your feedback in markdown format with proper headings, bullet points, and emphasis.`;
       console.log('Feedback prompt created, length:', fullPrompt.length);
       
       // Using a larger model for complex feedback
@@ -165,8 +239,11 @@ export async function POST(request: Request) {
       console.log('Feedback length:', feedback.length);
       console.log('Feedback preview:', feedback.substring(0, 100) + '...');
       
+      // Ensure proper markdown formatting
+      const formattedFeedback = ensureMarkdownFormatting(feedback);
+      
       console.timeEnd('feedbackApiTotalTime');
-      return NextResponse.json({ feedback });
+      return NextResponse.json({ feedback: formattedFeedback });
     } catch (apiError) {
       console.error('Error calling Hugging Face API for feedback:', apiError);
       console.log('API error details:', JSON.stringify(apiError).substring(0, 200) + '...');
