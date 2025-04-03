@@ -756,6 +756,86 @@ export default function Simulator() {
     debugLog('Simulation reset complete');
   };
 
+  const handleEndSession = async () => {
+    if (showStopConfirmation) {
+      setIsLoadingFeedback(true);
+      setIsTransitioning(true);
+      
+      const startTime = Date.now();
+      
+      // Save transcript to database
+      try {
+        const response = await fetch('/api/transcripts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messages }),
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to save transcript:', await response.text());
+        }
+      } catch (error) {
+        console.error('Error saving transcript:', error);
+      }
+      
+      // Check if we have enough messages for meaningful feedback
+      const meaningfulConversation = messages.length >= 3;
+      
+      if (!meaningfulConversation) {
+        debugLog('Not enough conversation for meaningful feedback');
+        setFeedbackDebug(`Session ended with only ${messages.length} messages. Need at least 3 for meaningful feedback.`);
+        
+        // Add a small delay to ensure the loading screen is visible
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        setFeedback(
+          "## Session Ended Early\n\n" +
+          "You ended the consultation before having a meaningful conversation with Mr. Johnson.\n\n" +
+          "To receive personalized feedback on your medical interaction skills, please engage in a conversation with the patient before ending the session.\n\n" +
+          "### Tips for a good consultation:\n\n" +
+          "1. **Start with a greeting** - Introduce yourself and ask how the patient is feeling\n" +
+          "2. **Gather information** - Ask about symptoms, duration, and severity\n" +
+          "3. **Show empathy** - Acknowledge the patient's concerns and feelings\n" +
+          "4. **Explain clearly** - Use simple language to explain medical concepts\n" +
+          "5. **Plan together** - Discuss next steps and treatment options\n\n" +
+          "Please start a new simulation and engage in a conversation before ending the session."
+        );
+        setIsTransitioning(true);
+        setTimeout(() => {
+          setSessionEnded(true);
+          setIsLoadingFeedback(false);
+        }, 100);
+        return;
+      }
+      
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages })
+      });
+      
+      const responseTime = Date.now() - startTime;
+      debugLog(`Feedback API response received in ${responseTime}ms, status: ${response.status}`);
+      setFeedbackDebug(`API response time: ${responseTime}ms, status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get feedback: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      debugLog('Feedback received, length:', data.feedback?.length);
+      setFeedback(data.feedback);
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setSessionEnded(true);
+        setIsLoadingFeedback(false);
+      }, 100);
+    }
+  };
+
   if (sessionEnded) {
     console.log('Rendering session ended view, feedback:', feedback ? 'present' : 'missing', 'messages length:', messages.length);
     return (
@@ -920,8 +1000,11 @@ export default function Simulator() {
                     const startTime = Date.now();
                     debugLog('Calling feedback API');
                     
-                    // Check if there's enough conversation to provide meaningful feedback
-                    const meaningfulConversation = messages.length > 2; // At least 2 exchanges
+                    // Save transcript to database
+                    await handleEndSession();
+                    
+                    // Check if we have enough messages for meaningful feedback
+                    const meaningfulConversation = messages.length >= 3;
                     
                     if (!meaningfulConversation) {
                       debugLog('Not enough conversation for meaningful feedback');
