@@ -683,6 +683,76 @@ export default function Simulator() {
     }
   }, [isSpeaking]);
 
+  // Function to reset the simulation
+  const resetSimulation = () => {
+    // Reset all state variables
+    setInput("");
+    setIsListening(false);
+    setMessages([{ role: "patient", content: "Hello, nice to see you." }]);
+    setIsLoading(false);
+    setIsSpeaking(false);
+    setSessionEnded(false);
+    setFeedback("");
+    setApiErrors([]);
+    setNeedsUserInteraction(true);
+    setInitialGreetingPlayed(false);
+    setMicVolume(0);
+    setLastSpeechTimestamp(0);
+    setAutoSendTimer(null);
+    setAutoSendCountdown(null);
+    setTextOnlyMode(false);
+    setShowStopConfirmation(false);
+    setIsTransitioning(false);
+    setIsLoadingFeedback(false);
+    
+    // Reset refs
+    isRecognitionActive.current = false;
+    recognitionStartAttempts.current = 0;
+    isRecognitionInitialized.current = false;
+    isSendingMessage.current = false;
+    isManualToggle.current = false;
+    
+    // Stop any active speech recognition
+    if (recognition.current) {
+      try {
+        recognition.current.stop();
+      } catch (error) {
+        debugLog('Error stopping speech recognition during reset:', error);
+      }
+    }
+    
+    // Stop any playing audio
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (error) {
+        debugLog('Error stopping audio during reset:', error);
+      }
+    }
+    
+    // Clean up audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.suspend();
+      } catch (error) {
+        debugLog('Error suspending audio context during reset:', error);
+      }
+    }
+    
+    // Clean up microphone stream
+    if (micStreamRef.current) {
+      try {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+        micStreamRef.current = null;
+      } catch (error) {
+        debugLog('Error stopping microphone stream during reset:', error);
+      }
+    }
+    
+    debugLog('Simulation reset complete');
+  };
+
   if (sessionEnded) {
     return (
       <div className={`min-h-screen flex flex-col transition-opacity duration-500 ${isTransitioning ? 'opacity-100' : 'opacity-0'}`}>
@@ -748,12 +818,12 @@ export default function Simulator() {
           </div>
           
           <div className="mt-6 text-center">
-            <Link 
-              href="/simulator"
+            <button 
+              onClick={resetSimulation}
               className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors transform hover:scale-105"
             >
-              Start New Simulation
-            </Link>
+              Start New Simulation [To be built]
+            </button>
           </div>
         </main>
       </div>
@@ -803,6 +873,32 @@ export default function Simulator() {
                   try {
                     const startTime = Date.now();
                     debugLog('Calling feedback API');
+                    
+                    // Check if there's enough conversation to provide meaningful feedback
+                    const meaningfulConversation = messages.length > 2; // At least 2 exchanges
+                    
+                    if (!meaningfulConversation) {
+                      debugLog('Not enough conversation for meaningful feedback');
+                      setFeedback(
+                        "## Session Ended Early\n\n" +
+                        "You ended the consultation before having a meaningful conversation with Mr. Johnson.\n\n" +
+                        "To receive personalized feedback on your medical interaction skills, please engage in a conversation with the patient before ending the session.\n\n" +
+                        "### Tips for a good consultation:\n\n" +
+                        "1. **Start with a greeting** - Introduce yourself and ask how the patient is feeling\n" +
+                        "2. **Gather information** - Ask about symptoms, duration, and severity\n" +
+                        "3. **Show empathy** - Acknowledge the patient's concerns and feelings\n" +
+                        "4. **Explain clearly** - Use simple language to explain medical concepts\n" +
+                        "5. **Plan together** - Discuss next steps and treatment options\n\n" +
+                        "Please start a new simulation and engage in a conversation before ending the session."
+                      );
+                      setIsTransitioning(true);
+                      setTimeout(() => {
+                        setSessionEnded(true);
+                        setIsLoadingFeedback(false);
+                      }, 100);
+                      return;
+                    }
+                    
                     const response = await fetch("/api/feedback", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },

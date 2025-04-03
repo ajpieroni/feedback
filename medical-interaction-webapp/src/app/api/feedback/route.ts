@@ -52,7 +52,7 @@ const generateFallbackFeedback = (messages: any[]) => {
   return `
 # Feedback on Medical Consultation
 
-## 1. Building Rapport
+1. Building Rapport
 **Rating**: Very Good
 
 **Strengths**:
