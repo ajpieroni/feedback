@@ -4,17 +4,17 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-blue-700 text-white p-6">
-        <h1 className="text-3xl font-bold">Medical Interaction Simulator</h1>
-        <p className="mt-2">Practice medical consultations with an AI patient</p>
+        <h1 className="text-3xl font-bold">SimPatient</h1>
+        <p className="mt-2">Build clinical confidence through realistic AI-powered consultations</p>
       </header>
 
       <main className="flex-grow flex flex-col items-center justify-center p-8 text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4">Welcome to the Medical Interaction Simulator</h2>
+          <h2 className="text-2xl font-semibold mb-4">Built for First-Year Medical Students</h2>
           <p className="mb-6">
-            This platform allows medical students and professionals to practice their consultation skills
-            with an AI-powered virtual patient. Receive detailed feedback on your interpersonal skills
-            and medical reasoning.
+            SimPatient helps you practice real patient conversations—before you ever meet a real one. 
+            Whether you're prepping for your first SP session or building empathy and structure in CSF1, 
+            this platform gives you a safe space to learn and grow.
           </p>
 
           <div className="bg-gray-50 p-6 rounded-lg mb-8 shadow-sm">
@@ -22,23 +22,23 @@ export default function Home() {
             <ul className="text-left space-y-2">
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">✓</span>
-                <span>Real-time speech-to-text and text-to-speech interaction</span>
+                <span>Practice interviewing a virtual patient in real-time</span>
               </li>
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">✓</span>
-                <span>Support for both voice and keyboard input</span>
+                <span>Choose voice or keyboard input to match your style</span>
               </li>
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">✓</span>
-                <span>AI-powered patient simulation</span>
+                <span>Get immediate feedback based on empathy and structure</span>
               </li>
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">✓</span>
-                <span>EPA (Entrustable Professional Activities) based feedback</span>
+                <span>Present your findings to an AI attending</span>
               </li>
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">✓</span>
-                <span>Conversation transcript saving</span>
+                <span>Review your transcript and improve with each session</span>
               </li>
             </ul>
           </div>
@@ -53,7 +53,7 @@ export default function Home() {
       </main>
 
       <footer className="bg-gray-100 p-4 text-center text-gray-600 text-sm">
-        &copy; {new Date().getFullYear()} Medical Interaction Simulator
+        &copy; {new Date().getFullYear()} SimPatient
       </footer>
     </div>
   );

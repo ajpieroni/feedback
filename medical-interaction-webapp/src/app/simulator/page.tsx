@@ -770,8 +770,8 @@ export default function Simulator() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-blue-700 text-white p-6">
-        <h1 className="text-3xl font-bold">Medical Consultation Simulator</h1>
-        <p className="mt-2">Interact with Mr. Johnson, who has a sore throat</p>
+        <h1 className="text-3xl font-bold">SimPatient</h1>
+        <p className="mt-2">Interact with Mr. Johnson</p>
       </header>
       
       {/* Add audio element */}

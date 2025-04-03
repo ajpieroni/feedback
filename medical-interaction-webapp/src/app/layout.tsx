@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Medical Consultation Simulator",
-  description: "Practice medical consultations with an AI patient",
+  title: "SimPatient",
+  description: "Build clinical confidence through realistic AI-powered consultations",
 };
 
 export default function RootLayout({
