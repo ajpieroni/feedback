@@ -39,217 +39,110 @@ export default function Simulator() {
   // Speech recognition setup
   const SpeechRecognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   const recognition = useRef<any>(null);
+  const isRecognitionActive = useRef(false);
+  const recognitionStartAttempts = useRef(0);
+  const maxRecognitionStartAttempts = 3;
+  const isRecognitionInitialized = useRef(false);
 
-  // Auto-start speech recognition after component is mounted
+  // Speech recognition setup effect
   useEffect(() => {
-    // Don't do anything until user has interacted with the page
-    if (needsUserInteraction || textOnlyMode) {
-      debugLog('Waiting for user interaction before starting speech recognition or using text-only mode');
+    if (!SpeechRecognition) {
+      debugLog('Speech recognition not available in this browser');
       return;
     }
+
+    // Only initialize once
+    if (isRecognitionInitialized.current) {
+      debugLog('Speech recognition already initialized');
+      return;
+    }
+
+    debugLog('Setting up speech recognition');
     
-    // Only attempt to start if not already listening and not speaking
-    if (SpeechRecognition && !isListening && !isSpeaking) {
-      debugLog('Auto-starting speech recognition after user interaction');
-      try {
-        if (recognition.current) {
-          recognition.current.start();
-          debugLog('Speech recognition auto-started successfully');
-          setIsListening(true);
+    try {
+      recognition.current = new SpeechRecognition();
+      recognition.current.continuous = true;
+      recognition.current.interimResults = true;
+      
+      recognition.current.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0])
+          .map((result) => result.transcript)
+          .join("");
+        
+        debugLog('Speech recognition result:', transcript);
+        
+        // Only update the input if we're not currently playing audio
+        if (!isSpeaking) {
+          setInput(transcript);
+          setLastSpeechTimestamp(Date.now());
         } else {
-          debugLog('Speech recognition not initialized yet');
+          debugLog('Ignoring speech input while patient is speaking');
         }
-      } catch (error) {
-        debugLog('Error auto-starting speech recognition:', error);
-        setApiErrors(prev => [...prev, `Failed to auto-start speech recognition: ${(error as Error).message}`]);
-      }
-    } else {
-      if (isListening) {
-        debugLog('Not auto-starting speech recognition because it is already active');
-      } else if (isSpeaking) {
-        debugLog('Not auto-starting speech recognition because patient is speaking');
-      } else if (!SpeechRecognition) {
-        debugLog('Speech recognition not available in this browser');
-      }
-    }
-  }, [SpeechRecognition, isSpeaking, isListening, needsUserInteraction, textOnlyMode]);
+      };
 
-  useEffect(() => {
-    debugLog('Simulator component mounted');
-    
-    // Create audio element for ElevenLabs TTS
-    if (typeof window !== 'undefined' && !audioRef.current) {
-      audioRef.current = new Audio();
-      
-      // Add event listeners
-      audioRef.current.addEventListener('play', () => {
-        debugLog('Audio started playing');
-        setIsSpeaking(true);
-        
-        // Always stop speech recognition when patient speaks
-        if (recognition.current && isListening) {
-          debugLog('Making sure speech recognition is stopped while audio plays');
+      recognition.current.onend = () => {
+        debugLog('Speech recognition ended');
+        // Only try to restart if we're still supposed to be listening
+        if (isListening && !isSpeaking) {
+          debugLog('Attempting to restart speech recognition');
           try {
-            recognition.current.stop();
-            setIsListening(false);
+            recognition.current?.start();
           } catch (error) {
-            debugLog('Error stopping speech recognition during audio playback:', error);
+            debugLog('Error restarting speech recognition:', error);
+            setIsListening(false);
+            isRecognitionActive.current = false;
           }
         }
-      });
-      
-      audioRef.current.addEventListener('ended', () => {
-        debugLog('Audio finished playing');
-        setIsSpeaking(false);
+      };
+
+      recognition.current.onerror = (event: any) => {
+        debugLog('Speech recognition error:', event.error);
         
-        // Add a delay before re-enabling speech recognition
-        // This helps prevent the last bit of audio from being picked up
-        setTimeout(() => {
-          // Only restart speech recognition if we're not already in the process of speaking
-          // and user interaction has been completed
-          if (!needsUserInteraction && !isSpeaking && recognition.current && SpeechRecognition) {
-            debugLog('Audio playback fully complete, attempting to restart speech recognition');
-            try {
-              recognition.current.start();
-              setIsListening(true);
-              debugLog('Successfully restarted speech recognition after audio');
-            } catch (error) {
-              debugLog('Error restarting speech recognition after audio:', error);
-              setApiErrors(prev => [...prev, `Error restarting recognition: ${(error as Error).message}`]);
+        if (event.error === 'not-allowed') {
+          debugLog('Microphone permission denied');
+          setIsListening(false);
+          isRecognitionActive.current = false;
+          console.error('Microphone permission denied. Please allow microphone access and reload the page.');
+        } else if (event.error === 'network') {
+          debugLog('Network error detected, attempting to recover');
+          // Try to restart after a short delay
+          setTimeout(() => {
+            if (isListening && !isSpeaking) {
+              try {
+                recognition.current?.start();
+              } catch (error) {
+                debugLog('Error recovering from network error:', error);
+                setIsListening(false);
+                isRecognitionActive.current = false;
+              }
             }
-          } else {
-            debugLog('Not auto-restarting speech recognition after audio', {
-              needsUserInteraction,
-              isSpeaking,
-              recognitionExists: !!recognition.current
-            });
-          }
-        }, 1000); // Longer delay to ensure no audio feedback
-      });
-      
-      audioRef.current.addEventListener('error', (e) => {
-        debugLog('Audio playback error', e);
-        setIsSpeaking(false);
-        setApiErrors(prev => [...prev, `Audio playback error: ${(e as any).message || 'Unknown error'}`]);
-      });
-      
-      // Add pause event listener
-      audioRef.current.addEventListener('pause', () => {
-        debugLog('Audio playback paused');
-        if (audioRef.current?.currentTime === audioRef.current?.duration) {
-          debugLog('Audio playback completed');
+          }, 1000);
+        } else {
+          console.error('Speech recognition error:', event.error);
         }
-      });
-    }
-    
-    return () => {
-      // Clean up audio element
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-      debugLog('Simulator component unmounting');
-    };
-  }, [isListening]); // Add isListening as a dependency
-
-  useEffect(() => {
-    if (SpeechRecognition) {
-      debugLog('Setting up speech recognition');
+      };
       
-      // Create a new instance of speech recognition
-      try {
-        recognition.current = new SpeechRecognition();
-        recognition.current.continuous = true;
-        recognition.current.interimResults = true;
-        
-        recognition.current.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
-            .map((result: any) => result[0])
-            .map((result) => result.transcript)
-            .join("");
-          
-          debugLog('Speech recognition result:', transcript);
-          
-          // Only update the input if we're not currently playing audio
-          // This helps prevent feedback loops
-          if (!isSpeaking) {
-            setInput(transcript);
-            // Update lastSpeechTimestamp when new speech is detected
-            setLastSpeechTimestamp(Date.now());
-          } else {
-            debugLog('Ignoring speech input while patient is speaking');
-          }
-        };
-
-        recognition.current.onend = () => {
-          debugLog('Speech recognition ended, isListening state:', isListening);
-          
-          // Only restart if we intend to be listening and we're not speaking
-          if (isListening && !isSpeaking) {
-            debugLog('Restarting speech recognition');
-            try {
-              // Small delay to prevent rapid restarts
-              setTimeout(() => {
-                if (isListening && !isSpeaking) {
-                  recognition.current.start();
-                  debugLog('Speech recognition restarted successfully');
-                }
-              }, 300);
-            } catch (error) {
-              debugLog('Error restarting speech recognition:', error);
-              setApiErrors(prev => [...prev, `Error restarting speech recognition: ${(error as Error).message}`]);
-              // Reset listening state if we can't restart
-              setIsListening(false);
-            }
-          } else {
-            debugLog('Not restarting speech recognition because', 
-              isListening ? 'patient is speaking' : 'listening is disabled');
-          }
-        };
-
-        recognition.current.onerror = (event: any) => {
-          debugLog('Speech recognition error:', event.error);
-          setApiErrors(prev => [...prev, `Speech recognition error: ${event.error}`]);
-          
-          // Handle specific errors
-          if (event.error === 'not-allowed') {
-            debugLog('Microphone permission denied');
-            setIsListening(false);
-            setApiErrors(prev => [...prev, 'Microphone permission denied. Please allow microphone access and reload the page.']);
-          } else if (event.error === 'network') {
-            debugLog('Network error in speech recognition');
-            // Don't immediately restart on network errors
-            setIsListening(false);
-          } else if (event.error === 'aborted') {
-            // This is expected when we manually stop recognition
-            debugLog('Speech recognition was aborted');
-          }
-        };
-        
-        debugLog('Speech recognition setup complete');
-      } catch (error) {
-        debugLog('Error setting up speech recognition:', error);
-        setApiErrors(prev => [...prev, `Speech recognition setup error: ${(error as Error).message}`]);
-      }
-    } else {
-      debugLog('Speech recognition not available in this browser');
-      setApiErrors(prev => [...prev, 'Speech recognition is not supported in this browser']);
+      isRecognitionInitialized.current = true;
+      debugLog('Speech recognition setup complete');
+    } catch (error) {
+      debugLog('Error setting up speech recognition:', error);
+      console.error('Speech recognition setup error:', error);
     }
     
     // Cleanup function
     return () => {
       if (recognition.current) {
         try {
-          if (isListening) {
-            recognition.current.stop();
-          }
+          recognition.current.stop();
+          isRecognitionActive.current = false;
           debugLog('Speech recognition cleanup');
         } catch (error) {
           debugLog('Error during speech recognition cleanup:', error);
         }
       }
     };
-  }, [SpeechRecognition, isListening, isSpeaking]); // Added isSpeaking as dependency
+  }, [SpeechRecognition]);
 
   // Scroll to bottom of message list when new messages arrive
   useEffect(() => {
@@ -295,31 +188,42 @@ export default function Simulator() {
       try {
         recognition.current?.stop();
         setIsListening(false);
+        isRecognitionActive.current = false;
       } catch (error) {
         debugLog('Error stopping speech recognition:', error);
       }
     } else {
-      try {
-        recognition.current?.start();
-        setIsListening(true);
-      } catch (error) {
-        debugLog('Error starting speech recognition:', error);
-        setApiErrors(prev => [...prev, `Failed to start speech recognition: ${(error as Error).message}`]);
-      }
+      // Add a small delay before starting to ensure clean state
+      setTimeout(() => {
+        try {
+          recognition.current?.start();
+          setIsListening(true);
+          isRecognitionActive.current = true;
+        } catch (error) {
+          debugLog('Error starting speech recognition:', error);
+          console.error('Failed to start speech recognition:', error);
+          setIsListening(false);
+          isRecognitionActive.current = false;
+        }
+      }, 100);
     }
   };
 
   // Function to play text using ElevenLabs
   const speakWithElevenLabs = async (text: string) => {
-    if (!text || isSpeaking) return;
+    if (!text || isSpeaking || !audioRef.current) return;
     
     debugLog('Speaking with ElevenLabs:', text);
     
     // Temporarily disable speech recognition while the patient is speaking
     if (isListening) {
       debugLog('Pausing speech recognition while patient speaks');
-      recognition.current?.stop();
-      setIsListening(false);
+      try {
+        recognition.current?.stop();
+        setIsListening(false);
+      } catch (error) {
+        debugLog('Error stopping speech recognition:', error);
+      }
     }
     
     try {
@@ -344,13 +248,6 @@ export default function Simulator() {
         throw new Error(`Speech API error: ${response.status} ${errorText}`);
       }
       
-      // Log response headers for debugging
-      const headers: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
-      debugLog('Response headers:', headers);
-      
       // Get the audio data as blob
       const audioBlob = await response.blob();
       debugLog('Audio blob received, size:', audioBlob.size, 'type:', audioBlob.type);
@@ -363,59 +260,81 @@ export default function Simulator() {
       const audioUrl = URL.createObjectURL(audioBlob);
       debugLog('Created audio URL:', audioUrl);
       
-      // Play the audio
-      if (audioRef.current) {
-        // Stop any currently playing audio
+      // Set speaking state before playing
+      setIsSpeaking(true);
+      
+      // Stop any currently playing audio
+      try {
         audioRef.current.pause();
-        
-        // Set new source and play
-        audioRef.current.src = audioUrl;
-        
-        // Add event listeners for debugging
-        const onLoadedMetadata = () => {
-          debugLog('Audio metadata loaded, duration:', audioRef.current?.duration);
-        };
-        
-        const onCanPlay = () => {
-          debugLog('Audio can play now');
-        };
-        
-        audioRef.current.addEventListener('loadedmetadata', onLoadedMetadata);
-        audioRef.current.addEventListener('canplay', onCanPlay);
-        
-        try {
-          debugLog('Attempting to play audio...');
-          const playPromise = audioRef.current.play();
-          
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                debugLog('Audio playback started successfully');
-              })
-              .catch(error => {
-                debugLog('Error playing audio:', error);
-                setIsSpeaking(false);
-                setApiErrors(prev => [...prev, `Audio playback failed: ${error.message}`]);
-              })
-              .finally(() => {
-                // Remove event listeners
-                audioRef.current?.removeEventListener('loadedmetadata', onLoadedMetadata);
-                audioRef.current?.removeEventListener('canplay', onCanPlay);
-              });
-          }
-        } catch (playError) {
-          debugLog('Exception while playing audio:', playError);
-          setIsSpeaking(false);
-          setApiErrors(prev => [...prev, `Audio playback exception: ${(playError as Error).message}`]);
-        }
-      } else {
-        debugLog('Audio element reference is not available');
-        setApiErrors(prev => [...prev, 'Audio element reference is not available']);
+        audioRef.current.currentTime = 0;
+      } catch (error) {
+        debugLog('Error stopping previous audio:', error);
       }
+      
+      // Clean up old object URL if it exists
+      if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+      
+      // Set new source and play
+      audioRef.current.src = audioUrl;
+      
+      // Add event listeners for audio playback
+      const handleLoadedMetadata = () => {
+        debugLog('Audio metadata loaded');
+      };
+      
+      const handleCanPlay = () => {
+        debugLog('Audio can play');
+      };
+      
+      const handleEnded = () => {
+        debugLog('Audio playback ended');
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      const handleError = (error: Event) => {
+        debugLog('Audio playback error:', error);
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        console.error('Audio playback error:', error);
+      };
+      
+      audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audioRef.current.addEventListener('canplay', handleCanPlay);
+      audioRef.current.addEventListener('ended', handleEnded);
+      audioRef.current.addEventListener('error', handleError);
+      
+      try {
+        debugLog('Attempting to play audio...');
+        const playPromise = audioRef.current.play();
+        
+        if (playPromise !== undefined) {
+          await playPromise;
+          debugLog('Audio playback started successfully');
+        }
+      } catch (playError) {
+        debugLog('Exception while playing audio:', playError);
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        console.error('Audio playback exception:', playError);
+      }
+      
+      // Clean up event listeners
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audioRef.current.removeEventListener('canplay', handleCanPlay);
+          audioRef.current.removeEventListener('ended', handleEnded);
+          audioRef.current.removeEventListener('error', handleError);
+        }
+      };
+      
     } catch (error) {
       debugLog('Error in ElevenLabs speech:', error);
       setIsSpeaking(false);
-      setApiErrors(prev => [...prev, `ElevenLabs error: ${(error as Error).message}`]);
+      console.error('ElevenLabs error:', error);
     }
   };
 
@@ -594,20 +513,6 @@ export default function Simulator() {
     if (textOnlyMode) {
       debugLog('Text-only mode enabled, skipping speech recognition setup');
       setApiErrors(prev => [...prev, 'Text-only mode enabled. Microphone will remain disabled.']);
-    } else {
-      // After a short delay, auto-start speech recognition if available
-      setTimeout(() => {
-        if (SpeechRecognition && recognition.current && !isListening && !isSpeaking) {
-          try {
-            debugLog('Starting speech recognition after Start button click');
-            recognition.current.start();
-            setIsListening(true);
-          } catch (error) {
-            debugLog('Error starting speech recognition after button click:', error);
-            setApiErrors(prev => [...prev, `Error starting speech recognition: ${(error as Error).message}`]);
-          }
-        }
-      }, 500);
     }
     // useEffects will handle playing greeting
   };
@@ -826,109 +731,10 @@ export default function Simulator() {
         <p className="mt-2">Interact with Mr. Johnson, who has a sore throat</p>
       </header>
       
+      {/* Add audio element */}
+      <audio ref={audioRef} className="hidden" />
+      
       <main className="flex-grow p-4 md:p-6 max-w-4xl mx-auto w-full flex flex-col">
-        {/* Debug info section - expanded with more details */}
-        {apiErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold">Debug Info:</h3>
-              <button 
-                onClick={() => setApiErrors([])}
-                className="text-xs bg-red-200 hover:bg-red-300 rounded px-2 py-1"
-              >
-                Clear Errors
-              </button>
-            </div>
-            <ul className="list-disc pl-5">
-              {apiErrors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-            
-            {/* Advanced debugging info */}
-            <div className="mt-4 border-t border-red-200 pt-2">
-              <p className="font-medium mb-1 text-sm">System Diagnostics:</p>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <dt>Speech Recognition:</dt>
-                <dd>{typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Available' : 'Not Available'}</dd>
-                
-                <dt>Recognition State:</dt>
-                <dd>{isListening ? 'Listening' : 'Not Listening'}</dd>
-                
-                <dt>Audio Context:</dt>
-                <dd>{audioContextRef.current ? `${audioContextRef.current.state}` : 'Not initialized'}</dd>
-                
-                <dt>Browser:</dt>
-                <dd>{typeof navigator !== 'undefined' ? navigator.userAgent.split(' ').slice(-1)[0] : 'Unknown'}</dd>
-                
-                <dt>Microphone Stream:</dt>
-                <dd>{micStreamRef.current ? 'Active' : 'None'}</dd>
-                
-                <dt>Sample Rate:</dt>
-                <dd>{audioContextRef.current ? `${audioContextRef.current.sampleRate}Hz` : 'Unknown'}</dd>
-                
-                <dt>Speaking:</dt>
-                <dd>{isSpeaking ? 'Yes' : 'No'}</dd>
-                
-                <dt>User Interaction:</dt>
-                <dd>{needsUserInteraction ? 'Needed' : 'Complete'}</dd>
-              </dl>
-              <button 
-                onClick={async () => {
-                  debugLog('Manual device test requested');
-                  try {
-                    // List available devices
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const audioDevices = devices.filter(d => d.kind === 'audioinput');
-                    
-                    let deviceInfo = 'Available audio input devices:\n';
-                    audioDevices.forEach((device, i) => {
-                      deviceInfo += `${i+1}. ${device.label || 'Unnamed device'} (${device.deviceId.substring(0, 8)}...)\n`;
-                    });
-                    
-                    debugLog(deviceInfo);
-                    setApiErrors(prev => [...prev, deviceInfo]);
-                    
-                    // Test the default microphone
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                      audio: { 
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                      } 
-                    });
-                    
-                    debugLog('Obtained media stream for testing');
-                    
-                    // Get audio tracks info
-                    const audioTracks = stream.getAudioTracks();
-                    let trackInfo = 'Audio tracks info:\n';
-                    audioTracks.forEach((track, i) => {
-                      trackInfo += `Track ${i+1}: ${track.label}, enabled: ${track.enabled}, muted: ${track.muted}\n`;
-                      trackInfo += `Settings: ${JSON.stringify(track.getSettings())}\n`;
-                    });
-                    
-                    debugLog(trackInfo);
-                    setApiErrors(prev => [...prev, trackInfo]);
-                    
-                    // Clean up
-                    setTimeout(() => {
-                      stream.getTracks().forEach(track => track.stop());
-                    }, 2000);
-                    
-                  } catch (error) {
-                    debugLog('Error during device test:', error);
-                    setApiErrors(prev => [...prev, `Device test error: ${(error as Error).message}`]);
-                  }
-                }}
-                className="mt-2 text-xs bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded"
-              >
-                Test Audio Devices
-              </button>
-            </div>
-          </div>
-        )}
-        
         {/* First-time user interaction prompt */}
         {needsUserInteraction && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-4 flex flex-col items-center">
@@ -986,7 +792,7 @@ export default function Simulator() {
                         if (testVolume > 10) {
                           clearInterval(testMicInterval);
                           debugLog('Microphone test successful, volume detected:', testVolume);
-                          setApiErrors(prev => [...prev, `Microphone test successful! Volume level: ${testVolume}%`]);
+                          console.log('Microphone test successful! Volume level:', testVolume + '%');
                           
                           // Clean up test resources
                           setTimeout(() => {
@@ -1001,7 +807,7 @@ export default function Simulator() {
                         clearInterval(testMicInterval);
                         if (testVolume <= 10) {
                           debugLog('Microphone test failed, no volume detected');
-                          setApiErrors(prev => [...prev, 'Microphone test failed. No audio detected. Please check your microphone settings.']);
+                          console.log('Microphone test failed. No audio detected. Please check your microphone settings.');
                         }
                         
                         // Clean up test resources
@@ -1011,7 +817,7 @@ export default function Simulator() {
                       
                     } catch (error) {
                       debugLog('Error testing microphone:', error);
-                      setApiErrors(prev => [...prev, `Microphone test error: ${(error as Error).message}`]);
+                      console.error('Microphone test error:', error);
                     }
                   }}
                   className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
