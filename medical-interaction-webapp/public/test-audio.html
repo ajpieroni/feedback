@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Playback Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      margin: 10px 5px;
+      background-color: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #357ab8;
+    }
+    .log {
+      height: 300px;
+      overflow: auto;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 20px;
+      font-family: monospace;
+      background-color: #f5f5f5;
+    }
+    audio {
+      display: block;
+      margin-top: 20px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>ElevenLabs Audio Playback Test</h1>
+  
+  <div>
+    <label for="text-input">Text to speak:</label>
+    <textarea id="text-input" rows="4" style="width: 100%; margin-top: 10px;">Hello, this is a test of the ElevenLabs text to speech API. Can you hear me clearly?</textarea>
+  </div>
+  
+  <div>
+    <button id="test-direct">1. Test Direct MP3 Playback</button>
+    <button id="test-api">2. Test Speech API</button>
+    <button id="stop-playback">Stop Playback</button>
+  </div>
+  
+  <audio id="audio-player" controls></audio>
+  
+  <div class="log" id="log-output"></div>
+  
+  <script>
+    // Log function
+    function log(message) {
+      const timestamp = new Date().toISOString().substring(11, 23);
+      const logElement = document.getElementById('log-output');
+      logElement.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+      logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    // Get elements
+    const audioPlayer = document.getElementById('audio-player');
+    const textInput = document.getElementById('text-input');
+    
+    // Test direct MP3 playback
+    document.getElementById('test-direct').addEventListener('click', () => {
+      log('Testing direct MP3 playback');
+      
+      try {
+        // Use the test-audio.mp3 file created by our Node.js test
+        const audioPath = '/test-audio.mp3';
+        log(`Loading audio from: ${audioPath}`);
+        
+        // Set up audio events for debugging
+        audioPlayer.addEventListener('loadstart', () => log('Audio loadstart event'), { once: true });
+        audioPlayer.addEventListener('loadedmetadata', () => log(`Audio metadata loaded, duration: ${audioPlayer.duration}`), { once: true });
+        audioPlayer.addEventListener('canplay', () => log('Audio canplay event'), { once: true });
+        audioPlayer.addEventListener('play', () => log('Audio play event'), { once: true });
+        audioPlayer.addEventListener('error', (e) => log(`Audio error: ${audioPlayer.error?.code} - ${audioPlayer.error?.message || 'Unknown error'}`), { once: true });
+        
+        // Set audio source and play
+        audioPlayer.src = audioPath;
+        
+        // Play with promise handling
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => log('Audio playback started successfully'))
+            .catch(error => log(`Error playing audio: ${error.message}`));
+        }
+      } catch (error) {
+        log(`Exception: ${error.message}`);
+      }
+    });
+    
+    // Test Speech API
+    document.getElementById('test-api').addEventListener('click', async () => {
+      const text = textInput.value;
+      log(`Testing API with text: "${text.substring(0, 30)}..."`);
+      
+      try {
+        const startTime = Date.now();
+        
+        // Call our speech API
+        log('Fetching audio from speech API...');
+        const response = await fetch('/api/speech', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text }),
+        });
+        
+        const responseTime = Date.now() - startTime;
+        log(`API response received in ${responseTime}ms, status: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          log(`Error response body: ${errorText}`);
+          throw new Error(`Speech API error: ${response.status} ${errorText}`);
+        }
+        
+        // Log response headers for debugging
+        const headers = {};
+        response.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+        log(`Response headers: ${JSON.stringify(headers)}`);
+        
+        // Get the audio data as blob
+        const audioBlob = await response.blob();
+        log(`Audio blob received, size: ${audioBlob.size}, type: ${audioBlob.type}`);
+        
+        if (audioBlob.size === 0) {
+          throw new Error('Received empty audio blob from speech API');
+        }
+        
+        // Create object URL for audio playback
+        const audioUrl = URL.createObjectURL(audioBlob);
+        log(`Created audio URL: ${audioUrl}`);
+        
+        // Set up audio events for debugging
+        audioPlayer.addEventListener('loadstart', () => log('Audio loadstart event'), { once: true });
+        audioPlayer.addEventListener('loadedmetadata', () => log(`Audio metadata loaded, duration: ${audioPlayer.duration}`), { once: true });
+        audioPlayer.addEventListener('canplay', () => log('Audio canplay event'), { once: true });
+        audioPlayer.addEventListener('play', () => log('Audio play event'), { once: true });
+        audioPlayer.addEventListener('error', (e) => log(`Audio error: ${audioPlayer.error?.code} - ${audioPlayer.error?.message || 'Unknown error'}`), { once: true });
+        
+        // Set audio source and play
+        audioPlayer.src = audioUrl;
+        
+        // Play with promise handling
+        log('Attempting to play audio...');
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => log('Audio playback started successfully'))
+            .catch(error => log(`Error playing audio: ${error.message}`));
+        }
+      } catch (error) {
+        log(`Exception: ${error.message}`);
+      }
+    });
+    
+    // Stop playback
+    document.getElementById('stop-playback').addEventListener('click', () => {
+      log('Stopping audio playback');
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+    });
+    
+    // Initial log
+    log('Audio Playback Test ready');
+  </script>
+</body>
+</html> 

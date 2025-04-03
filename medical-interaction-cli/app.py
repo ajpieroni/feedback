@@ -13,12 +13,26 @@ import requests
 # Load environment variables
 load_dotenv()
 
-# ElevenLabs API key
+# API keys
 ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+
+# Model settings
+USE_HUGGINGFACE = HUGGINGFACE_API_KEY is not None
+MODEL_PROVIDER = "huggingface" if USE_HUGGINGFACE else "ollama"
+HUGGINGFACE_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"  # Using the same model as the webapp
+OLLAMA_MODEL = "llama2"  # Default Ollama model
+
+# Print configuration
 if ELEVEN_API_KEY:
     print("ElevenLabs API key loaded successfully")
 else:
     print("ElevenLabs API key not found in .env file")
+
+if USE_HUGGINGFACE:
+    print(f"Using Hugging Face API with model: {HUGGINGFACE_MODEL}")
+else:
+    print(f"Using Ollama with model: {OLLAMA_MODEL}")
 
 def speak(text):
     """Convert text to speech using ElevenLabs API only."""
@@ -318,8 +332,15 @@ At the end of your feedback, provide:
 Format your feedback clearly with specific verbatim quotes and actionable suggestions for improvement. Focus on practical, implementable advice that the student can use immediately."""
 
 def get_patient_response(user_input, conversation_history):
-    """Get response from the LLM patient using Ollama."""
+    """Get response from the LLM patient using either Ollama or Hugging Face."""
     # Prepare the full conversation context
+    if USE_HUGGINGFACE:
+        return get_huggingface_response(user_input, conversation_history)
+    else:
+        return get_ollama_response(user_input, conversation_history)
+
+def get_ollama_response(user_input, conversation_history):
+    """Get response using Ollama."""
     messages = [
         {"role": "system", "content": PATIENT_PROMPT},
         *conversation_history,
@@ -328,27 +349,159 @@ def get_patient_response(user_input, conversation_history):
     
     # Use Ollama to generate response
     response = ollama.chat(
-        model='llama2',  # You can change this to any model you have installed in Ollama
+        model=OLLAMA_MODEL,
         messages=messages,
         stream=False
     )
     
     return response['message']['content']
 
+def get_huggingface_response(user_input, conversation_history):
+    """Get response using Hugging Face API."""
+    messages = [
+        {"role": "system", "content": PATIENT_PROMPT},
+        *conversation_history,
+        {"role": "user", "content": user_input}
+    ]
+    
+    # Convert conversation to the format expected by the Hugging Face API
+    prompt = ""
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "system":
+            prompt += f"<s>[INST] <<SYS>>\n{content}\n<</SYS>>\n\n"
+        elif role == "user":
+            if prompt.endswith("[/INST]"):
+                prompt += f"<s>[INST] {content} [/INST]"
+            else:
+                prompt += f"{content} [/INST]"
+        elif role == "assistant":
+            prompt += f" {content} </s>"
+    
+    # If the prompt doesn't end with [/INST], add it
+    if not prompt.endswith("[/INST]"):
+        prompt += " [/INST]"
+    
+    # API endpoint
+    API_URL = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_MODEL}"
+    
+    # Headers
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Payload
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 100,
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "do_sample": True
+        }
+    }
+    
+    # Make the request
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        
+        # Parse the response
+        result = response.json()
+        
+        # Extract the generated text
+        if isinstance(result, list) and len(result) > 0:
+            generated_text = result[0].get("generated_text", "")
+            
+            # Extract the assistant's response after the last [/INST] tag
+            if "[/INST]" in generated_text:
+                assistant_response = generated_text.split("[/INST]")[-1].strip()
+                # Remove any remaining tags like </s>
+                assistant_response = assistant_response.replace("</s>", "").strip()
+                return assistant_response
+            else:
+                return generated_text
+        else:
+            return "I'm sorry, I couldn't generate a response. Please try again."
+    
+    except Exception as e:
+        print(f"Error calling Hugging Face API: {str(e)}")
+        return "I'm sorry, there was an error generating a response. Please try again."
+
 def get_epa_feedback(transcript):
-    """Get EPA-based feedback on the consultation using Ollama."""
+    """Get EPA-based feedback on the consultation using either Ollama or Hugging Face."""
+    if USE_HUGGINGFACE:
+        return get_huggingface_feedback(transcript)
+    else:
+        return get_ollama_feedback(transcript)
+
+def get_ollama_feedback(transcript):
+    """Get feedback using Ollama."""
     messages = [
         {"role": "system", "content": EPA_FEEDBACK_PROMPT},
         {"role": "user", "content": transcript}
     ]
     
     response = ollama.chat(
-        model='llama2',  # You can change this to any model you have installed in Ollama
+        model=OLLAMA_MODEL,
         messages=messages,
         stream=False
     )
     
     return response['message']['content']
+
+def get_huggingface_feedback(transcript):
+    """Get feedback using Hugging Face API."""
+    prompt = f"<s>[INST] <<SYS>>\n{EPA_FEEDBACK_PROMPT}\n<</SYS>>\n\n{transcript} [/INST]"
+    
+    # API endpoint
+    API_URL = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_MODEL}"
+    
+    # Headers
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Payload
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 500,
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "do_sample": True
+        }
+    }
+    
+    # Make the request
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        
+        # Parse the response
+        result = response.json()
+        
+        # Extract the generated text
+        if isinstance(result, list) and len(result) > 0:
+            generated_text = result[0].get("generated_text", "")
+            
+            # Extract the assistant's response after the last [/INST] tag
+            if "[/INST]" in generated_text:
+                assistant_response = generated_text.split("[/INST]")[-1].strip()
+                # Remove any remaining tags like </s>
+                assistant_response = assistant_response.replace("</s>", "").strip()
+                return assistant_response
+            else:
+                return generated_text
+        else:
+            return "I'm sorry, I couldn't generate feedback. Please try again."
+    
+    except Exception as e:
+        print(f"Error calling Hugging Face API: {str(e)}")
+        return "I'm sorry, there was an error generating feedback. Please try again."
 
 def main():
     conversation_history = []
