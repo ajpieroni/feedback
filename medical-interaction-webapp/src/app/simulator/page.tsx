@@ -30,6 +30,10 @@ export default function Simulator() {
   const [autoSendTimer, setAutoSendTimer] = useState<NodeJS.Timeout | null>(null); // Timer for auto-sending
   const [autoSendCountdown, setAutoSendCountdown] = useState<number | null>(null); // Countdown for auto-send
   const [textOnlyMode, setTextOnlyMode] = useState(false); // Option to use text-only mode
+  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [feedbackDebug, setFeedbackDebug] = useState(""); // Add debug state
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -435,6 +439,12 @@ export default function Simulator() {
     let userMessage = input.trim();
     debugLog('Preparing to send message:', userMessage);
     
+    // Check if user wants to end session
+    if (userMessage.toUpperCase() === "STOP") {
+      setShowStopConfirmation(true);
+      return;
+    }
+    
     // More aggressive checks for accidentally captured patient speech
     const lastPatientMessages = messages
       .filter(m => m.role === "patient")
@@ -490,41 +500,6 @@ export default function Simulator() {
     
     // Add user message to chat
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    
-    // Check if user wants to end session
-    if (userMessage.toUpperCase() === "STOP") {
-      debugLog('Session end requested, getting feedback');
-      setIsLoading(true);
-      try {
-        const startTime = Date.now();
-        // Get feedback from API
-        debugLog('Calling feedback API');
-        const response = await fetch("/api/feedback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages })
-        });
-        
-        const responseTime = Date.now() - startTime;
-        debugLog(`Feedback API response received in ${responseTime}ms, status: ${response.status}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to get feedback: ${response.status} ${errorText}`);
-        }
-        
-        const data = await response.json();
-        debugLog('Feedback received, length:', data.feedback?.length);
-        setFeedback(data.feedback);
-        setSessionEnded(true);
-      } catch (error) {
-        debugLog('Error getting feedback:', error);
-        setApiErrors(prev => [...prev, `Feedback error: ${(error as Error).message}`]);
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
     
     // Get response from API
     setIsLoading(true);
@@ -709,45 +684,161 @@ export default function Simulator() {
     }
   }, [isSpeaking]);
 
+  // Function to reset the simulation
+  const resetSimulation = () => {
+    console.log('Resetting simulation');
+    // Reset all state variables
+    setInput("");
+    setIsListening(false);
+    setMessages([{ role: "patient", content: "Hello, nice to see you." }]);
+    setIsLoading(false);
+    setIsSpeaking(false);
+    setSessionEnded(false);
+    setFeedback("");
+    setApiErrors([]);
+    setNeedsUserInteraction(true);
+    setInitialGreetingPlayed(false);
+    setMicVolume(0);
+    setLastSpeechTimestamp(0);
+    setAutoSendTimer(null);
+    setAutoSendCountdown(null);
+    setTextOnlyMode(false);
+    setShowStopConfirmation(false);
+    setIsTransitioning(false);
+    setIsLoadingFeedback(false);
+    setFeedbackDebug(""); // Reset debug state
+    
+    // Reset refs
+    isRecognitionActive.current = false;
+    recognitionStartAttempts.current = 0;
+    isRecognitionInitialized.current = false;
+    isSendingMessage.current = false;
+    isManualToggle.current = false;
+    
+    // Stop any active speech recognition
+    if (recognition.current) {
+      try {
+        recognition.current.stop();
+      } catch (error) {
+        debugLog('Error stopping speech recognition during reset:', error);
+      }
+    }
+    
+    // Stop any playing audio
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (error) {
+        debugLog('Error stopping audio during reset:', error);
+      }
+    }
+    
+    // Clean up audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.suspend();
+      } catch (error) {
+        debugLog('Error suspending audio context during reset:', error);
+      }
+    }
+    
+    // Clean up microphone stream
+    if (micStreamRef.current) {
+      try {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+        micStreamRef.current = null;
+      } catch (error) {
+        debugLog('Error stopping microphone stream during reset:', error);
+      }
+    }
+    
+    debugLog('Simulation reset complete');
+  };
+
   if (sessionEnded) {
+    console.log('Rendering session ended view, feedback:', feedback ? 'present' : 'missing', 'messages length:', messages.length);
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className={`min-h-screen flex flex-col transition-opacity duration-500 ${isTransitioning ? 'opacity-100' : 'opacity-0'}`}>
         <header className="bg-blue-700 text-white p-6">
           <h1 className="text-3xl font-bold">Simulation Complete</h1>
+          <p className="mt-2 text-blue-100">Thank you for completing the consultation</p>
         </header>
         
         <main className="flex-grow p-6 max-w-4xl mx-auto w-full">
-          <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+          <div className="bg-white shadow-md rounded-lg p-6 mb-6 transform transition-all duration-500 ease-out">
             <h2 className="text-2xl font-semibold mb-4">Feedback on Your Interaction</h2>
+            
+            {/* Short session warning */}
+            {messages.length <= 2 && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <h3 className="text-lg font-semibold text-yellow-700">Short Session Detected</h3>
+                    <p className="text-yellow-600">Your consultation was very brief. For a more comprehensive evaluation, please engage in a longer conversation with the patient.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="prose prose-blue max-w-none bg-gray-50 p-4 rounded">
               {feedback ? (
                 <ReactMarkdown 
                   components={{
-                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-4 mb-2" {...props} />,
-                    h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-4 mb-2" {...props} />,
-                    h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-3 mb-2" {...props} />,
-                    p: ({node, ...props}) => <p className="mb-2" {...props} />,
-                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2" {...props} />,
-                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-2" {...props} />,
+                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold mt-6 mb-3 text-blue-800" {...props} />,
+                    h2: ({node, ...props}) => <h2 className="text-xl font-bold mt-5 mb-2 text-blue-700" {...props} />,
+                    h3: ({node, ...props}) => <h3 className="text-lg font-bold mt-4 mb-2 text-blue-600" {...props} />,
+                    p: ({node, ...props}) => <p className="mb-3 text-gray-700" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-3 text-gray-700" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-3 text-gray-700" {...props} />,
                     li: ({node, ...props}) => <li className="mb-1" {...props} />,
-                    strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
-                    em: ({node, ...props}) => <em className="italic" {...props} />
+                    strong: ({node, ...props}) => <strong className="font-bold text-gray-800" {...props} />,
+                    em: ({node, ...props}) => <em className="italic text-gray-700" {...props} />,
+                    blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-300 pl-4 italic my-3 text-gray-600" {...props} />,
+                    code: ({node, ...props}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
+                    pre: ({node, ...props}) => <pre className="bg-gray-100 p-3 rounded overflow-x-auto my-3" {...props} />,
+                    hr: ({node, ...props}) => <hr className="my-4 border-t border-gray-300" {...props} />,
+                    table: ({node, ...props}) => <table className="min-w-full divide-y divide-gray-300 my-3" {...props} />,
+                    thead: ({node, ...props}) => <thead className="bg-gray-100" {...props} />,
+                    tbody: ({node, ...props}) => <tbody className="divide-y divide-gray-200" {...props} />,
+                    tr: ({node, ...props}) => <tr className="hover:bg-gray-50" {...props} />,
+                    th: ({node, ...props}) => <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700" {...props} />,
+                    td: ({node, ...props}) => <td className="px-4 py-2 text-sm text-gray-700" {...props} />
                   }}
                 >
                   {feedback}
                 </ReactMarkdown>
               ) : (
-                "Feedback is being generated..."
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Generating feedback...</span>
+                </div>
               )}
             </div>
+            
+            {/* Debug information */}
+            {feedbackDebug && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-700">
+                <p className="font-semibold">Debug Info:</p>
+                <p>{feedbackDebug}</p>
+              </div>
+            )}
           </div>
           
-          <div className="bg-white shadow-md rounded-lg p-6">
+          <div className="bg-white shadow-md rounded-lg p-6 transform transition-all duration-500 ease-out delay-200">
             <h2 className="text-2xl font-semibold mb-4">Conversation Transcript</h2>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-96 overflow-y-auto">
               {messages.map((msg, index) => (
-                <div key={index} className={`p-3 rounded-lg ${msg.role === "user" ? "bg-blue-100" : "bg-gray-100"}`}>
-                  <p className="font-semibold">{msg.role === "user" ? "Doctor" : "Mr. Johnson"}</p>
+                <div 
+                  key={index} 
+                  className={`p-3 rounded-lg transform transition-all duration-300 ${
+                    msg.role === "user" ? "bg-blue-100 ml-auto max-w-[80%]" : "bg-gray-100 mr-auto max-w-[80%]"
+                  }`}
+                >
+                  <p className="font-semibold">{msg.role === "user" ? "You" : "Mr. Johnson"}</p>
                   <p>{msg.content}</p>
                 </div>
               ))}
@@ -755,12 +846,12 @@ export default function Simulator() {
           </div>
           
           <div className="mt-6 text-center">
-            <Link 
-              href="/simulator"
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            <button 
+              onClick={resetSimulation}
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors transform hover:scale-105"
             >
-              Start New Simulation
-            </Link>
+              Start New Simulation [To be built]
+            </button>
           </div>
         </main>
       </div>
@@ -769,6 +860,135 @@ export default function Simulator() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Loading Screen */}
+      {isLoadingFeedback && (
+        console.log('Rendering loading feedback screen, messages length:', messages.length),
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-90 flex flex-col items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600"></div>
+            </div>
+            <h3 className="text-xl font-semibold mb-2 text-gray-800">Generating Feedback</h3>
+            <p className="text-gray-600 mb-4">
+              We're analyzing your consultation to provide personalized feedback. This may take a moment...
+            </p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+              <div className="bg-blue-600 h-2.5 rounded-full w-3/4 animate-pulse"></div>
+            </div>
+            <p className="text-sm text-gray-500">Please wait while we process your session</p>
+            
+            {/* Debug information */}
+            {feedbackDebug && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-700">
+                <p className="font-semibold">Debug Info:</p>
+                <p>{feedbackDebug}</p>
+              </div>
+            )}
+            
+            {/* Add a more visible message for short sessions */}
+            {messages.length <= 2 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
+                <p className="font-semibold">Short Session Detected</p>
+                <p>Your session appears to be very short. You'll receive guidance on how to conduct a more comprehensive consultation.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Stop Confirmation Dialog */}
+      {showStopConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
+            <h3 className="text-xl font-semibold mb-4">End Consultation?</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to end the consultation? You will receive feedback on your interaction.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowStopConfirmation(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  console.log('End consultation button clicked, messages length:', messages.length);
+                  setShowStopConfirmation(false);
+                  setIsLoadingFeedback(true);
+                  try {
+                    const startTime = Date.now();
+                    debugLog('Calling feedback API');
+                    
+                    // Check if there's enough conversation to provide meaningful feedback
+                    const meaningfulConversation = messages.length > 2; // At least 2 exchanges
+                    
+                    if (!meaningfulConversation) {
+                      debugLog('Not enough conversation for meaningful feedback');
+                      setFeedbackDebug(`Session ended with only ${messages.length} messages. Need at least 3 for meaningful feedback.`);
+                      
+                      // Add a small delay to ensure the loading screen is visible
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      
+                      setFeedback(
+                        "## Session Ended Early\n\n" +
+                        "You ended the consultation before having a meaningful conversation with Mr. Johnson.\n\n" +
+                        "To receive personalized feedback on your medical interaction skills, please engage in a conversation with the patient before ending the session.\n\n" +
+                        "### Tips for a good consultation:\n\n" +
+                        "1. **Start with a greeting** - Introduce yourself and ask how the patient is feeling\n" +
+                        "2. **Gather information** - Ask about symptoms, duration, and severity\n" +
+                        "3. **Show empathy** - Acknowledge the patient's concerns and feelings\n" +
+                        "4. **Explain clearly** - Use simple language to explain medical concepts\n" +
+                        "5. **Plan together** - Discuss next steps and treatment options\n\n" +
+                        "Please start a new simulation and engage in a conversation before ending the session."
+                      );
+                      setIsTransitioning(true);
+                      setTimeout(() => {
+                        setSessionEnded(true);
+                        setIsLoadingFeedback(false);
+                      }, 100);
+                      return;
+                    }
+                    
+                    const response = await fetch("/api/feedback", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ messages })
+                    });
+                    
+                    const responseTime = Date.now() - startTime;
+                    debugLog(`Feedback API response received in ${responseTime}ms, status: ${response.status}`);
+                    setFeedbackDebug(`API response time: ${responseTime}ms, status: ${response.status}`);
+                    
+                    if (!response.ok) {
+                      const errorText = await response.text();
+                      throw new Error(`Failed to get feedback: ${response.status} ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    debugLog('Feedback received, length:', data.feedback?.length);
+                    setFeedback(data.feedback);
+                    setIsTransitioning(true);
+                    setTimeout(() => {
+                      setSessionEnded(true);
+                      setIsLoadingFeedback(false);
+                    }, 100);
+                  } catch (error) {
+                    debugLog('Error getting feedback:', error);
+                    setFeedbackDebug(`Error: ${(error as Error).message}`);
+                    setApiErrors(prev => [...prev, `Feedback error: ${(error as Error).message}`]);
+                    setIsLoadingFeedback(false);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                End Consultation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <header className="bg-blue-700 text-white p-6">
         <h1 className="text-3xl font-bold">SimPatient</h1>
         <p className="mt-2">Interact with Mr. Johnson</p>
