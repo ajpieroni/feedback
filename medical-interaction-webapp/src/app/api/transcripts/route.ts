@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: Request) {
   try {
@@ -14,22 +12,37 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create a new transcript with all messages
-    const transcript = await prisma.transcript.create({
-      data: {
-        messages: {
-          create: messages.map((msg: { role: string; content: string }) => ({
-            content: msg.content,
-            role: msg.role,
-          })),
-        },
-      },
-      include: {
-        messages: true,
-      },
-    });
+    // Create a new transcript
+    const transcriptResult = await sql`
+      INSERT INTO transcripts (id, created_at, updated_at)
+      VALUES (gen_random_uuid(), NOW(), NOW())
+      RETURNING id
+    `;
+    const transcriptId = transcriptResult.rows[0].id;
 
-    return NextResponse.json({ transcript });
+    // Insert all messages
+    for (const msg of messages) {
+      await sql`
+        INSERT INTO messages (id, content, role, transcript_id, created_at)
+        VALUES (gen_random_uuid(), ${msg.content}, ${msg.role}, ${transcriptId}, NOW())
+      `;
+    }
+
+    // Fetch the complete transcript with messages
+    const transcript = await sql`
+      SELECT t.*, json_agg(json_build_object(
+        'id', m.id,
+        'content', m.content,
+        'role', m.role,
+        'createdAt', m.created_at
+      ) ORDER BY m.created_at) as messages
+      FROM transcripts t
+      LEFT JOIN messages m ON t.id = m.transcript_id
+      WHERE t.id = ${transcriptId}
+      GROUP BY t.id
+    `;
+
+    return NextResponse.json({ transcript: transcript.rows[0] });
   } catch (error) {
     console.error('Error saving transcript:', error);
     return NextResponse.json(
@@ -41,20 +54,20 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const transcripts = await prisma.transcript.findMany({
-      include: {
-        messages: {
-          orderBy: {
-            createdAt: 'asc',
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const transcripts = await sql`
+      SELECT t.*, json_agg(json_build_object(
+        'id', m.id,
+        'content', m.content,
+        'role', m.role,
+        'createdAt', m.created_at
+      ) ORDER BY m.created_at) as messages
+      FROM transcripts t
+      LEFT JOIN messages m ON t.id = m.transcript_id
+      GROUP BY t.id
+      ORDER BY t.created_at DESC
+    `;
 
-    return NextResponse.json({ transcripts });
+    return NextResponse.json({ transcripts: transcripts.rows });
   } catch (error) {
     console.error('Error fetching transcripts:', error);
     return NextResponse.json(
