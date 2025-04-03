@@ -43,6 +43,10 @@ export default function Simulator() {
   const recognitionStartAttempts = useRef(0);
   const maxRecognitionStartAttempts = 3;
   const isRecognitionInitialized = useRef(false);
+  const isSendingMessage = useRef(false);
+
+  // Add a ref to track if we're manually toggling
+  const isManualToggle = useRef(false);
 
   // Speech recognition setup effect
   useEffect(() => {
@@ -76,6 +80,16 @@ export default function Simulator() {
         if (!isSpeaking) {
           setInput(transcript);
           setLastSpeechTimestamp(Date.now());
+          
+          // If this is a final result (not interim), update the input
+          if (!event.results[0].isFinal) {
+            debugLog('Interim result, waiting for final result');
+            return;
+          }
+          
+          // No auto-send, just update the input
+          debugLog('Final speech result detected, updating input');
+          // handleSendMessage();
         } else {
           debugLog('Ignoring speech input while patient is speaking');
         }
@@ -84,6 +98,7 @@ export default function Simulator() {
       recognition.current.onend = () => {
         debugLog('Speech recognition ended');
         // Only try to restart if we're still supposed to be listening
+        // and we haven't just sent a message
         if (isListening && !isSpeaking) {
           debugLog('Attempting to restart speech recognition');
           try {
@@ -177,6 +192,7 @@ export default function Simulator() {
     
     // Normal toggle behavior
     debugLog('Toggle listening:', !isListening);
+    isManualToggle.current = true;
     
     // Never toggle while speaking
     if (isSpeaking) {
@@ -292,6 +308,20 @@ export default function Simulator() {
         debugLog('Audio playback ended');
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
+        
+        // Auto-start listening after patient stops speaking
+        if (!textOnlyMode && !isListening) {
+          debugLog('Auto-starting speech recognition after patient stops speaking');
+          setTimeout(() => {
+            try {
+              recognition.current?.start();
+              setIsListening(true);
+              isRecognitionActive.current = true;
+            } catch (error) {
+              debugLog('Error auto-starting speech recognition:', error);
+            }
+          }, 500); // Small delay before starting
+        }
       };
       
       const handleError = (error: Event) => {
@@ -299,6 +329,20 @@ export default function Simulator() {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
         console.error('Audio playback error:', error);
+        
+        // Auto-start listening even if there's an error
+        if (!textOnlyMode && !isListening) {
+          debugLog('Auto-starting speech recognition after audio error');
+          setTimeout(() => {
+            try {
+              recognition.current?.start();
+              setIsListening(true);
+              isRecognitionActive.current = true;
+            } catch (error) {
+              debugLog('Error auto-starting speech recognition:', error);
+            }
+          }, 500);
+        }
       };
       
       audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -319,6 +363,20 @@ export default function Simulator() {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
         console.error('Audio playback exception:', playError);
+        
+        // Auto-start listening even if there's a play error
+        if (!textOnlyMode && !isListening) {
+          debugLog('Auto-starting speech recognition after play error');
+          setTimeout(() => {
+            try {
+              recognition.current?.start();
+              setIsListening(true);
+              isRecognitionActive.current = true;
+            } catch (error) {
+              debugLog('Error auto-starting speech recognition:', error);
+            }
+          }, 500);
+        }
       }
       
       // Clean up event listeners
@@ -335,6 +393,20 @@ export default function Simulator() {
       debugLog('Error in ElevenLabs speech:', error);
       setIsSpeaking(false);
       console.error('ElevenLabs error:', error);
+      
+      // Auto-start listening even if there's an API error
+      if (!textOnlyMode && !isListening) {
+        debugLog('Auto-starting speech recognition after API error');
+        setTimeout(() => {
+          try {
+            recognition.current?.start();
+            setIsListening(true);
+            isRecognitionActive.current = true;
+          } catch (error) {
+            debugLog('Error auto-starting speech recognition:', error);
+          }
+        }, 500);
+      }
     }
   };
 
@@ -617,72 +689,24 @@ export default function Simulator() {
     };
   }, []);
 
-  // Add auto-send functionality based on speech inactivity
+  // Remove the auto-stop effect completely
   useEffect(() => {
-    // Only enable auto-send when actively listening and not speaking
-    if (!isListening || isSpeaking || needsUserInteraction || isLoading) {
-      // Clear any existing timers when conditions change
-      if (autoSendTimer) {
-        clearTimeout(autoSendTimer);
-        setAutoSendTimer(null);
-      }
-      setAutoSendCountdown(null);
-      return;
-    }
+    // This effect is intentionally empty to disable auto-stop
+    return () => {};
+  }, []);
 
-    // Process silence detection and auto-send
-    const handleSilenceDetection = () => {
-      const now = Date.now();
-      const silenceTime = now - lastSpeechTimestamp;
-      
-      // Only proceed if we have input and there's been silence
-      if (input.trim() && lastSpeechTimestamp > 0 && silenceTime >= 500) {
-        // Calculate countdown (from 2 seconds down to 0)
-        const remainingTime = Math.max(0, 2000 - silenceTime);
-        
-        if (remainingTime <= 0) {
-          // Time to auto-send
-          if (!isSpeaking && isListening) {
-            debugLog('Auto-sending message after 2 seconds of silence');
-            handleSendMessage();
-            setAutoSendCountdown(null);
-            return;
-          }
-        } else {
-          // Update countdown display
-          setAutoSendCountdown(Math.ceil(remainingTime / 1000));
-          
-          // Continue checking
-          const timer = setTimeout(handleSilenceDetection, 100);
-          setAutoSendTimer(timer);
-          return;
-        }
-      }
-      
-      setAutoSendCountdown(null);
-    };
-    
-    // If input changed or speech was detected, restart the process
-    if (input.trim() !== '') {
-      // Start the silence detection process
-      if (autoSendTimer) {
-        clearTimeout(autoSendTimer);
-      }
-      
-      const timer = setTimeout(handleSilenceDetection, 500);
-      setAutoSendTimer(timer);
-    } else {
-      // No input to send
-      setAutoSendCountdown(null);
+  // Remove the auto-send effect completely
+  useEffect(() => {
+    // This effect is intentionally empty to disable auto-send
+    return () => {};
+  }, []);
+
+  // Reset manual toggle flag when speaking state changes
+  useEffect(() => {
+    if (!isSpeaking) {
+      isManualToggle.current = false;
     }
-    
-    // Clean up on unmount
-    return () => {
-      if (autoSendTimer) {
-        clearTimeout(autoSendTimer);
-      }
-    };
-  }, [input, lastSpeechTimestamp, isListening, isSpeaking, needsUserInteraction, isLoading, handleSendMessage]);
+  }, [isSpeaking]);
 
   if (sessionEnded) {
     return (
