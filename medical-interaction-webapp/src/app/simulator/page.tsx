@@ -34,9 +34,12 @@ export default function Simulator() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [feedbackDebug, setFeedbackDebug] = useState(""); // Add debug state
+  const [isReadingFeedback, setIsReadingFeedback] = useState(false);
+  const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
+  const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -756,6 +759,165 @@ export default function Simulator() {
     debugLog('Simulation reset complete');
   };
 
+  // Initialize speech synthesis
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      speechSynthesisRef.current = window.speechSynthesis;
+    }
+  }, []);
+
+  // Clean up speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (speechSynthesisRef.current) {
+        speechSynthesisRef.current.cancel();
+      }
+    };
+  }, []);
+
+  // Initialize audio element
+  useEffect(() => {
+    audioRef.current = new Audio();
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
+
+  const convertFeedbackToSpeech = useCallback((feedback: string) => {
+    // Extract key points from the feedback
+    const sections = feedback.split('##');
+    let strengths = '';
+    let improvements = '';
+    let overall = '';
+    
+    sections.forEach(section => {
+      if (section.includes('Strengths')) {
+        strengths = section.split('Strengths')[1]?.split('Areas for Improvement')[0] || '';
+      }
+      if (section.includes('Areas for Improvement')) {
+        improvements = section.split('Areas for Improvement')[1] || '';
+      }
+      if (section.includes('Overall Assessment')) {
+        overall = section.split('Overall Assessment')[1] || '';
+      }
+    });
+
+    // Create a conversational summary
+    let speechText = "Let me share some thoughts about your consultation. ";
+    
+    if (strengths) {
+      speechText += "You did really well in several areas. " + 
+        strengths
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\s*-\s*/g, ', ')
+          .trim() + " ";
+    }
+    
+    if (improvements) {
+      speechText += "Here are some areas where you could enhance your approach. " +
+        improvements
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\s*-\s*/g, ', ')
+          .trim() + " ";
+    }
+    
+    if (overall) {
+      speechText += "Overall, " + 
+        overall
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .trim() + " ";
+    }
+    
+    // Add a warm closing
+    speechText += "Keep up the great work, and remember that every interaction is an opportunity to grow. I'm looking forward to seeing your progress in future consultations.";
+    
+    return speechText;
+  }, []);
+
+  const handleReadFeedback = useCallback(async () => {
+    if (!feedback || !audioRef.current) return;
+
+    try {
+      setIsReadingFeedback(true);
+      
+      // Stop any ongoing audio
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+
+      const speechText = convertFeedbackToSpeech(feedback);
+      
+      // Call our speech API endpoint
+      const response = await fetch('/api/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: speechText })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate speech');
+      }
+
+      // Create a blob URL from the audio data
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Set up audio element
+      audioRef.current.src = audioUrl;
+      
+      // Add event listeners
+      const handleEnded = () => {
+        setIsReadingFeedback(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      const handleError = () => {
+        setIsReadingFeedback(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audioRef.current.addEventListener('ended', handleEnded);
+      audioRef.current.addEventListener('error', handleError);
+
+      // Play the audio
+      await audioRef.current.play();
+
+      // Clean up event listeners
+      return () => {
+        audioRef.current?.removeEventListener('ended', handleEnded);
+        audioRef.current?.removeEventListener('error', handleError);
+      };
+    } catch (error) {
+      console.error('Error playing feedback:', error);
+      setIsReadingFeedback(false);
+    }
+  }, [feedback, convertFeedbackToSpeech]);
+
+  const handleStopReading = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsReadingFeedback(false);
+    }
+  }, []);
+
   if (sessionEnded) {
     console.log('Rendering session ended view, feedback:', feedback ? 'present' : 'missing', 'messages length:', messages.length);
     return (
@@ -767,7 +929,34 @@ export default function Simulator() {
         
         <main className="flex-grow p-6 max-w-4xl mx-auto w-full">
           <div className="bg-white shadow-md rounded-lg p-6 mb-6 transform transition-all duration-500 ease-out">
-            <h2 className="text-2xl font-semibold mb-4">Feedback on Your Interaction</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold">Feedback on Your Interaction</h2>
+              {feedback && (
+                <div className="flex space-x-2">
+                  {!isReadingFeedback ? (
+                    <button
+                      onClick={handleReadFeedback}
+                      className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                      </svg>
+                      <span>Listen to Feedback</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStopReading}
+                      className="flex items-center space-x-1 bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
+                      </svg>
+                      <span>Stop</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             
             {/* Short session warning */}
             {messages.length <= 2 && (
