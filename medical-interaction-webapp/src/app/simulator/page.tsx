@@ -932,7 +932,7 @@ export default function Simulator() {
                       
                       setFeedback(
                         "## Session Ended Early\n\n" +
-                        "You ended the consultation before having a meaningful conversation with Mr. Johnson.\n\n" +
+                        "You ended the consultation before having a meaningful conversation with the patient.\n\n" +
                         "To receive personalized feedback on your medical interaction skills, please engage in a conversation with the patient before ending the session.\n\n" +
                         "### Tips for a good consultation:\n\n" +
                         "1. **Start with a greeting** - Introduce yourself and ask how the patient is feeling\n" +
@@ -991,7 +991,7 @@ export default function Simulator() {
       
       <header className="bg-blue-700 text-white p-6">
         <h1 className="text-3xl font-bold">SimPatient</h1>
-        <p className="mt-2">Interact with Mr. Johnson</p>
+        <p className="mt-2">Practice Your Clinical Communication Skills</p>
       </header>
       
       {/* Add audio element */}
