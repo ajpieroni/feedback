@@ -11,7 +11,7 @@ const debugLog = (message: string, ...args: any[]) => {
 };
 
 export default function Simulator() {
-  // debugLog('Simulator component initializing');
+  // debugLog('Simulator component initializing!!!');
   
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false); // Start with microphone off
