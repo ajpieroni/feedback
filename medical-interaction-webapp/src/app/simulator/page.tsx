@@ -11,7 +11,7 @@ const debugLog = (message: string, ...args: any[]) => {
 };
 
 export default function Simulator() {
-  debugLog('Simulator component initializing');
+  // debugLog('Simulator component initializing');
   
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false); // Start with microphone off
@@ -34,9 +34,12 @@ export default function Simulator() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [feedbackDebug, setFeedbackDebug] = useState(""); // Add debug state
+  const [isReadingFeedback, setIsReadingFeedback] = useState(false);
+  const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
+  const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -756,6 +759,265 @@ export default function Simulator() {
     debugLog('Simulation reset complete');
   };
 
+  // Initialize speech synthesis
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      speechSynthesisRef.current = window.speechSynthesis;
+    }
+  }, []);
+
+  // Clean up speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (speechSynthesisRef.current) {
+        speechSynthesisRef.current.cancel();
+      }
+    };
+  }, []);
+
+  // Initialize audio element
+  useEffect(() => {
+    console.log('Initializing audio element');
+    if (typeof window !== 'undefined') {
+      audioRef.current = new Audio();
+      console.log('Audio element created:', audioRef.current);
+    }
+    return () => {
+      if (audioRef.current) {
+        console.log('Cleaning up audio element');
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+  }, []);
+
+  const convertFeedbackToSpeech = useCallback((feedback: string) => {
+    // Extract key points from the feedback
+    const sections = feedback.split('##');
+    let strengths = '';
+    let improvements = '';
+    let overall = '';
+    
+    sections.forEach(section => {
+      if (section.includes('Strengths')) {
+        strengths = section.split('Strengths')[1]?.split('Areas for Improvement')[0] || '';
+      }
+      if (section.includes('Areas for Improvement')) {
+        improvements = section.split('Areas for Improvement')[1] || '';
+      }
+      if (section.includes('Overall Assessment')) {
+        overall = section.split('Overall Assessment')[1] || '';
+      }
+    });
+
+    // Create authoritative, direct feedback focusing on patient impact
+    let speechText = "As an experienced clinician, I want to share my perspective on your consultation and how it would impact a real patient. ";
+
+    if (strengths) {
+      speechText += "You showed strong clinical skills in several areas. " + 
+        strengths
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\s*-\s*/g, ', ')
+          .trim() + " ";
+    }
+    
+    if (improvements) {
+      speechText += "Now, let me point out specific moments where your approach could have better served the patient. " +
+        improvements
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\s*-\s*/g, ', ')
+          .trim() + " ";
+    }
+    
+    if (overall) {
+      speechText += "Looking at the entire interaction, " + 
+        overall
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/`/g, '')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .trim() + " ";
+    }
+    
+    // Add a direct, actionable closing
+    speechText += "In your next consultation, I want you to focus on three key things: First, pay close attention to the patient's emotional state and respond with genuine empathy. Second, when explaining medical concepts, use clear, simple language and check for understanding. Third, take moments to pause and allow the patient to express their concerns fully. These changes will make a significant difference in how your patients feel about their care.";
+    
+    return speechText;
+  }, []);
+
+  const handleReadFeedback = useCallback(async () => {
+    console.log('=== STARTING FEEDBACK AUDIO PLAYBACK ===');
+    console.log('Current state:', {
+      hasFeedback: !!feedback,
+      hasAudioRef: !!audioRef.current,
+      isReadingFeedback,
+      audioRefState: audioRef.current ? {
+        src: audioRef.current.src,
+        paused: audioRef.current.paused,
+        currentTime: audioRef.current.currentTime,
+        readyState: audioRef.current.readyState,
+        error: audioRef.current.error
+      } : 'No audio element'
+    });
+
+    if (!feedback) {
+      console.error('No feedback available to read');
+      return;
+    }
+
+    if (!audioRef.current) {
+      console.error('Audio element not initialized - creating new one');
+      audioRef.current = new Audio();
+      if (!audioRef.current) {
+        console.error('Failed to create audio element');
+        setApiErrors(prev => [...prev, 'Failed to initialize audio playback']);
+        return;
+      }
+    }
+
+    try {
+      console.log('Setting isReadingFeedback to true');
+      setIsReadingFeedback(true);
+      
+      // Stop any ongoing audio
+      console.log('Stopping any ongoing audio');
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+
+      console.log('Converting feedback to speech text');
+      const speechText = convertFeedbackToSpeech(feedback);
+      console.log('Converted speech text:', speechText);
+      
+      // Call our speech API endpoint
+      console.log('Calling speech API endpoint');
+      const response = await fetch('/api/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: speechText })
+      });
+
+      console.log('Speech API response status:', response.status);
+      console.log('Speech API response headers:', Object.fromEntries([...response.headers]));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Speech API error response:', errorText);
+        throw new Error(`Failed to generate speech: ${errorText}`);
+      }
+
+      // Get the audio data as blob
+      console.log('Getting audio blob from response');
+      const audioBlob = await response.blob();
+      console.log('Audio blob received:', {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+      
+      if (audioBlob.size === 0) {
+        console.error('Received empty audio blob');
+        throw new Error('Received empty audio blob');
+      }
+
+      // Create object URL for audio playback
+      console.log('Creating object URL for audio blob');
+      const audioUrl = URL.createObjectURL(audioBlob);
+      console.log('Created audio URL:', audioUrl);
+
+      // Set up audio element
+      console.log('Setting up audio element');
+      audioRef.current.src = audioUrl;
+      
+      // Add event listeners
+      console.log('Adding audio event listeners');
+      const handleEnded = () => {
+        console.log('Audio playback ended');
+        setIsReadingFeedback(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      const handleError = (error: Event) => {
+        console.error('Audio playback error:', error);
+        setIsReadingFeedback(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      const handleCanPlay = () => {
+        console.log('Audio can play');
+      };
+
+      const handleLoadedMetadata = () => {
+        console.log('Audio metadata loaded');
+      };
+
+      audioRef.current.addEventListener('ended', handleEnded);
+      audioRef.current.addEventListener('error', handleError);
+      audioRef.current.addEventListener('canplay', handleCanPlay);
+      audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+
+      // Play the audio
+      console.log('Attempting to play audio');
+      try {
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          console.log('Audio playback started successfully');
+        }
+      } catch (playError) {
+        console.error('Error playing audio:', playError);
+        setIsReadingFeedback(false);
+        URL.revokeObjectURL(audioUrl);
+      }
+
+      // Clean up event listeners
+      return () => {
+        console.log('Cleaning up audio event listeners');
+        audioRef.current?.removeEventListener('ended', handleEnded);
+        audioRef.current?.removeEventListener('error', handleError);
+        audioRef.current?.removeEventListener('canplay', handleCanPlay);
+        audioRef.current?.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      };
+    } catch (error) {
+      console.error('Error in handleReadFeedback:', error);
+      setIsReadingFeedback(false);
+      // Show error to user
+      setApiErrors(prev => [...prev, `Error playing feedback: ${(error as Error).message}`]);
+    }
+  }, [feedback, convertFeedbackToSpeech]);
+
+  const handleStopReading = useCallback(() => {
+    console.log('=== STOPPING FEEDBACK AUDIO ===');
+    console.log('Current state:', {
+      hasAudioRef: !!audioRef.current,
+      isReadingFeedback,
+      audioRefState: audioRef.current ? {
+        src: audioRef.current.src,
+        paused: audioRef.current.paused,
+        currentTime: audioRef.current.currentTime
+      } : 'No audio element'
+    });
+
+    if (audioRef.current) {
+      console.log('Stopping audio playback');
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsReadingFeedback(false);
+    } else {
+      console.error('No audio element available to stop');
+    }
+  }, []);
+
   if (sessionEnded) {
     console.log('Rendering session ended view, feedback:', feedback ? 'present' : 'missing', 'messages length:', messages.length);
     return (
@@ -767,7 +1029,34 @@ export default function Simulator() {
         
         <main className="flex-grow p-6 max-w-4xl mx-auto w-full">
           <div className="bg-white shadow-md rounded-lg p-6 mb-6 transform transition-all duration-500 ease-out">
-            <h2 className="text-2xl font-semibold mb-4">Feedback on Your Interaction</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold">Feedback on Your Interaction</h2>
+              {feedback && (
+                <div className="flex space-x-2">
+                  {!isReadingFeedback ? (
+                    <button
+                      onClick={handleReadFeedback}
+                      className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                      </svg>
+                      <span>Listen to Feedback</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStopReading}
+                      className="flex items-center space-x-1 bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
+                      </svg>
+                      <span>Stop</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             
             {/* Short session warning */}
             {messages.length <= 2 && (
