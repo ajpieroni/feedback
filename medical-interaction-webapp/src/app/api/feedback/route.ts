@@ -19,7 +19,7 @@ try {
 }
 
 // EPA feedback prompt with focus on bedside manner and empathy
-const EPA_FEEDBACK_PROMPT = `Analyze the following medical consultation transcript from a SimPatient session and provide detailed, actionable feedback with a focus on developing bedside manner and empathetic communication. This feedback is intended for a first-year medical student working to build confidence in patient interactions. Remember: "Confidence starts with conversation."
+const EPA_FEEDBACK_PROMPT = `Analyze the following medical consultation transcript from a SimPatient session and provide detailed, actionable feedback with a focus on developing bedside manner and empathetic communication. This feedback is intended for healthcare professionals working to build confidence in patient interactions. Remember: "Confidence starts with conversation."
 
 Base your evaluation on these components, with special emphasis on empathetic engagement:
 
@@ -31,12 +31,12 @@ Base your evaluation on these components, with special emphasis on empathetic en
 For each component, please provide:
 - A rating: Poor, Fair, Adequate, Very Good, or Excellent.
 - Specific strengths, including concrete examples from the transcript.
-- Specific areas for improvement, with actionable suggestions. For example, if the student asks "Do you have any questions?" suggest replacing it with "What questions do you have for me?" to invite a more detailed response.
+- Specific areas for improvement, with actionable suggestions. For example, if the clinician asks "Do you have any questions?" suggest replacing it with "What questions do you have for me?" to invite a more detailed response.
 
-In your feedback, evaluate the student's performance against the following criteria (inspired by the rubric by Daniel Ostrovsky, MD and AAMC EPA guidelines):
-- **Chief Complaint & History:** Assess whether the student effectively asks about pain quality, severity, duration, timing, and factors affecting the pain, as well as associated symptoms and context.
-- **Information Gathering:** Confirm that the student inquires about medications, allergies, past medical history, family history, and social history, and organizes the information clearly.
-- **Assessment and Plan:** Evaluate whether the student orders appropriate tests (e.g., a strep test) and constructs a logical, justified plan with differential diagnoses, advising against unnecessary tests.
+In your feedback, evaluate the clinician's performance against the following criteria:
+- **Chief Complaint & History:** Assess whether the clinician effectively asks about pain quality, severity, duration, timing, and factors affecting the pain, as well as associated symptoms and context.
+- **Information Gathering:** Confirm that the clinician inquires about medications, allergies, past medical history, family history, and social history, and organizes the information clearly.
+- **Assessment and Plan:** Evaluate whether the clinician orders appropriate tests and constructs a logical, justified plan with differential diagnoses, advising against unnecessary tests.
 - **Interviewing Style and Bedside Manner:** Focus on the tone, empathy, and communication style. Provide specific recommendations for improving bedside manner—such as rephrasing generic questions ("Do you have any questions?") to more engaging ones ("What questions do you have for me?")—and for consistently demonstrating warmth and respect.
 
 Do not include feedback on active listening since visual cues (e.g., eye contact) are not assessable in this simulation.
@@ -50,7 +50,7 @@ Format your entire response in Markdown with:
 - Hyphenated bullet points for lists.
 - Adequate spacing between sections.
 
-Your response should be well-structured and designed to help first-year med students build their clinical skills, particularly in bedside manner and empathetic communication.
+Your response should be well-structured and designed to help healthcare professionals build their clinical skills, particularly in bedside manner and empathetic communication.
 `;
 
 // Fallback feedback if the API fails, emphasizing bedside manner and empathy
@@ -83,7 +83,7 @@ You effectively gathered key details about the patient's symptoms, which is esse
 - You collected important background information that provides context.
 
 **Areas for Improvement**:
-- Explore the patient’s emotional and psychosocial responses to their symptoms for a more holistic view.
+- Explore the patient's emotional and psychosocial responses to their symptoms for a more holistic view.
 - Consider asking additional questions about how the symptoms affect the patient's daily life.
 
 ## Explanation and Planning

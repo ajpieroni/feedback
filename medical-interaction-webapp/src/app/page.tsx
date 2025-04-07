@@ -10,11 +10,11 @@ export default function Home() {
 
       <main className="flex-grow flex flex-col items-center justify-center p-8 text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4">Built for First-Year Medical Students</h2>
+          <h2 className="text-2xl font-semibold mb-4">Build Your Clinical Communication Skills</h2>
           <p className="mb-6">
-            SimPatient helps you practice real patient conversations—before you ever meet a real one. 
-            Whether you're prepping for your first SP session or building empathy and structure in CSF1, 
-            this platform gives you a safe space to learn and grow.
+            SimPatient helps you practice real patient conversations in a safe, supportive environment. 
+            Whether you're preparing for clinical rotations or looking to enhance your patient interaction skills, 
+            this platform provides a space to learn and grow.
           </p>
 
           <div className="bg-gray-50 p-6 rounded-lg mb-8 shadow-sm">
